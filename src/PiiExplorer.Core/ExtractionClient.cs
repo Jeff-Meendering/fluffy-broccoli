@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Text;
@@ -10,13 +11,19 @@ public sealed class ExtractionClient(RuntimePaths paths) : IDisposable
     private Process? _process;
     private DirectoryInfo? _tempDirectory;
     private int _reading;
+    private int _terminated;
     private readonly char[] _buffer = new char[4096];
     private int _position, _length;
 
+    public int? WorkerProcessId => _process?.Id;
+
     private void EnsureStarted()
     {
-        if (_process is { HasExited: false }) return;
+        // A killed process can still report HasExited == false while its termination is
+        // pending, so a stopped worker is never handed another request.
+        if (_process is { HasExited: false } && Volatile.Read(ref _terminated) == 0) return;
         Dispose();
+        Volatile.Write(ref _terminated, 0);
         // CreateTempSubdirectory uses owner-only permissions on Unix. Isolate Tika and
         // its OCR children's scratch files as well as our own archive/image staging.
         _tempDirectory = Directory.CreateTempSubdirectory("PiiExplorer-");
@@ -58,7 +65,7 @@ public sealed class ExtractionClient(RuntimePaths paths) : IDisposable
         {
             EnsureStarted();
             var process = _process!;
-            using var registration = cancellationToken.Register(() => Kill(process));
+            using var registration = cancellationToken.Register(() => Terminate(process));
             await process.StandardInput.WriteLineAsync(JsonSerializer.Serialize(new
             {
                 path = Path.GetFullPath(file),
@@ -125,25 +132,38 @@ public sealed class ExtractionClient(RuntimePaths paths) : IDisposable
         catch (Exception e) when (e is IOException or ObjectDisposedException) { }
     }
 
-    private static void Kill(Process process)
+    private void Terminate(Process process)
     {
-        try { if (!process.HasExited) process.Kill(entireProcessTree: true); }
-        catch (Exception e) when (e is InvalidOperationException or System.ComponentModel.Win32Exception) { }
+        Volatile.Write(ref _terminated, 1);
+        if (process.HasExited) return;
+        try
+        {
+            try { process.Kill(entireProcessTree: true); }
+            catch (Exception e) when (e is InvalidOperationException or Win32Exception or NotSupportedException) { }
+            // A failed tree walk must still stop the worker itself: a surviving worker
+            // still holds the tail of the response it was producing.
+            if (!process.HasExited) process.Kill();
+        }
+        catch (Exception e) when (e is InvalidOperationException or Win32Exception or NotSupportedException) { }
     }
-    public void Stop() { var process = _process; if (process is not null) Kill(process); }
+    // Stopping discards the worker instead of leaving a pending kill for the next request
+    // to discover: the following request must always start a usable process.
+    public void Stop() { if (_process is null) return; Dispose(); }
     public void Dispose()
     {
         var process = _process;
         if (process is not null)
         {
-            Kill(process);
+            Terminate(process);
             try { process.WaitForExit(2000); }
             catch (InvalidOperationException) { } // A failed start has no process handle.
             process.Dispose(); _process = null;
         }
         if (_tempDirectory is not null)
         {
-            _tempDirectory.Delete(recursive: true); _tempDirectory = null;
+            try { _tempDirectory.Delete(recursive: true); }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
+            _tempDirectory = null;
         }
     }
 }

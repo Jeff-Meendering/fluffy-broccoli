@@ -41,6 +41,24 @@ public sealed class ExtractionRegressionTests : IDisposable
     }
     private static byte[] Text(string text) => Encoding.UTF8.GetBytes(text);
 
+    private static bool IsRunning(int id)
+    {
+        try {
+            using var process = System.Diagnostics.Process.GetProcessById(id);
+            return !process.HasExited;
+        }
+        catch (Exception e) when (e is ArgumentException or InvalidOperationException or System.ComponentModel.Win32Exception) { return false; }
+    }
+
+    private static async Task<bool> ExitedAsync(int id)
+    {
+        for (int attempt = 0; attempt < 100; attempt++) {
+            if (!IsRunning(id)) return true;
+            await Task.Delay(100);
+        }
+        return false;
+    }
+
     [Fact]
     public async Task DocumentTableHeadersPreserveSensitiveColumnSemantics()
     {
@@ -271,6 +289,120 @@ public sealed class ExtractionRegressionTests : IDisposable
         await foreach (var part in client.ReadAsync(path, false, restartDeadline.Token)) found.Add(part.Text);
         Assert.Contains(found, text => text.Contains("restarted@example.net"));
         Assert.DoesNotContain(found, text => text.Contains("first@example.com"));
+    }
+
+    [Fact] public async Task ImmediateStopBeforeReuseAlwaysStartsAUsableWorker()
+    {
+        string path = Path.Combine(_temp, "worker.html");
+        File.WriteAllText(path, "<html><body>worker@example.net</body></html>");
+        using var client = new ExtractionClient(TestPaths.Assets);
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+        for (int attempt = 0; attempt < 5; attempt++) {
+            client.Stop();
+            var found = new List<string>();
+            await foreach (var part in client.ReadAsync(path, false, deadline.Token)) found.Add(part.Text);
+            Assert.Contains(found, text => text.Contains("worker@example.net"));
+        }
+    }
+
+    [Fact] public async Task StopAndDisposeTerminateTheWorkerProcess()
+    {
+        string path = Path.Combine(_temp, "worker.html");
+        File.WriteAllText(path, "<html><body>worker@example.net</body></html>");
+        var client = new ExtractionClient(TestPaths.Assets);
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        await foreach (var part in client.ReadAsync(path, false, deadline.Token)) { }
+        int? started = client.WorkerProcessId;
+        Assert.True(started.HasValue);
+        Assert.True(IsRunning(started.Value), $"Worker {started} was not running before Stop");
+        client.Stop();
+        Assert.Null(client.WorkerProcessId);
+        Assert.True(await ExitedAsync(started.Value), $"Worker {started} survived Stop");
+        var found = new List<string>();
+        await foreach (var part in client.ReadAsync(path, false, deadline.Token)) found.Add(part.Text);
+        Assert.Contains(found, text => text.Contains("worker@example.net"));
+        int? restarted = client.WorkerProcessId;
+        Assert.NotNull(restarted);
+        Assert.NotEqual(started, restarted);
+        Assert.True(IsRunning(restarted!.Value));
+        client.Dispose();
+        Assert.True(await ExitedAsync(started.Value), $"Worker {started} survived Dispose");
+        Assert.True(await ExitedAsync(restarted.Value), $"Worker {restarted} survived Dispose");
+    }
+
+    [Fact] public async Task StopWithoutAStartedWorkerIsSafeAndRepeatedDisposeDoesNotThrow()
+    {
+        string path = Path.Combine(_temp, "worker.html");
+        File.WriteAllText(path, "<html><body>worker@example.net</body></html>");
+        var client = new ExtractionClient(TestPaths.Assets);
+        client.Stop(); client.Stop();
+        client.Dispose(); client.Dispose();
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        var found = new List<string>();
+        await foreach (var part in client.ReadAsync(path, false, deadline.Token)) found.Add(part.Text);
+        Assert.Contains(found, text => text.Contains("worker@example.net"));
+    }
+
+    [Fact] public async Task FailedRequestFollowedByStopDoesNotHideTheNextHealthyDocument()
+    {
+        File.Copy(Fixture("corpus", "08_broken", "corrupt.docx"), Path.Combine(_temp, "corrupt.docx"));
+        string healthy = Fixture("corpus", "03_pdf", "invoice.pdf");
+        using var client = new ExtractionClient(TestPaths.Assets);
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+        try {
+            await foreach (var part in client.ReadAsync(Path.Combine(_temp, "corrupt.docx"), false, deadline.Token)) { }
+        }
+        catch (Exception e) when (e is IOException or InvalidOperationException or TimeoutException) {
+            _output.WriteLine("Corrupt document failed as expected: " + e.Message);
+        }
+        client.Stop();
+        var texts = new List<string>();
+        await foreach (var part in client.ReadAsync(healthy, false, deadline.Token)) texts.Add(part.Text);
+        Assert.Contains(texts, text => text.Contains("priya.r@example.net"));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task StopAfterAnUnfinishedRequestStartsAUsableWorker(bool cancelled)
+    {
+        string path = Path.Combine(_temp, "many.html");
+        File.WriteAllText(path, "<html><body>" + string.Concat(Enumerable.Repeat("first@example.com ", 5000)) + "</body></html>");
+        using var client = new ExtractionClient(TestPaths.Assets);
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        await using (var parts = client.ReadAsync(path, false, deadline.Token).GetAsyncEnumerator()) {
+            Assert.True(await parts.MoveNextAsync());
+            if (cancelled) {
+                deadline.Cancel();
+                await Assert.ThrowsAnyAsync<OperationCanceledException>(() => parts.MoveNextAsync().AsTask());
+            }
+        }
+        client.Stop();
+        File.WriteAllText(path, "<html><body>restarted@example.net</body></html>");
+        using var restartDeadline = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        var found = new List<string>();
+        await foreach (var part in client.ReadAsync(path, false, restartDeadline.Token)) found.Add(part.Text);
+        Assert.Contains(found, text => text.Contains("restarted@example.net"));
+        Assert.DoesNotContain(found, text => text.Contains("first@example.com"));
+    }
+
+    [Fact] public async Task FailuresOnOneWorkerDoNotStopLaterHealthyFiles()
+    {
+        foreach (var (name, source) in new[] {
+            ("a-corrupt.docx", new[] { "corpus", "08_broken", "corrupt.docx" }),
+            ("a-truncated.pdf", new[] { "corpus", "08_broken", "truncated.pdf" }),
+            ("a-broken.zip", new[] { "corpus", "09_archives", "broken.zip" }) })
+            File.Copy(Fixture(source), Path.Combine(_temp, name));
+        File.Copy(Fixture("corpus", "03_pdf", "invoice.pdf"), Path.Combine(_temp, "b-invoice.pdf"));
+        File.Copy(Fixture("corpus", "02_office", "staff-handbook.docx"), Path.Combine(_temp, "c-handbook.docx"));
+        var result = await Scan(new(Ocr: false, Names: false, Workers: 1));
+        Assert.Equal(5, result.Summary.Completed);
+        Assert.Contains(result.Findings, f => f.FileName == "b-invoice.pdf" && f.Type == "Email");
+        Assert.Contains(result.Findings, f => f.FileName == "c-handbook.docx" && f.Type == "Email");
+        foreach (string broken in new[] { "a-corrupt.docx", "a-truncated.pdf", "a-broken.zip" })
+            Assert.Contains(result.Issues, i => Path.GetFileName(i.FilePath) == broken);
+        Assert.DoesNotContain(result.Issues, i => (i.FilePath.EndsWith("b-invoice.pdf") || i.FilePath.EndsWith("c-handbook.docx")) &&
+            (i.Message.Contains("Could not fully check") || i.Message.Contains("stopped unexpectedly") || i.Message.Contains("File timeout")));
     }
 
     [Fact] public async Task ConcurrentWorkerRequestIsRejectedWithoutCorruptingActiveResponse()

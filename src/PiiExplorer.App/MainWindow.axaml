@@ -1,0 +1,131 @@
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="PiiExplorer.App.MainWindow" Width="1280" Height="840" MinWidth="940" MinHeight="660"
+        Title="PII Explorer">
+  <Grid RowDefinitions="76,*,34">
+    <Border Background="{DynamicResource HeaderBrush}" Padding="24,0">
+      <Grid ColumnDefinitions="*,Auto">
+        <StackPanel VerticalAlignment="Center" Spacing="4">
+          <TextBlock Text="PII Explorer" FontSize="23" FontWeight="SemiBold" Foreground="#F4FAFC" />
+          <TextBlock Text="Find personal information across your files" FontSize="12" Foreground="#B0C7D0" />
+        </StackPanel>
+        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="18" VerticalAlignment="Center">
+          <Border Background="#26454C" CornerRadius="12" Padding="11,6" VerticalAlignment="Center">
+            <TextBlock Text="LOCAL · PRIVATE" FontSize="10" FontWeight="SemiBold" Foreground="#B4E9DD" />
+          </Border>
+          <StackPanel Orientation="Horizontal" Spacing="9" VerticalAlignment="Center">
+            <TextBlock Text="Theme" Foreground="#B0C7D0" FontSize="12" VerticalAlignment="Center" />
+            <ComboBox Name="ThemeChoice" Width="108" Height="36" SelectionChanged="ThemeChanged"
+                      AutomationProperties.Name="Color theme" ToolTip.Tip="Choose System, Light or Dark. Your preference is saved." />
+          </StackPanel>
+        </StackPanel>
+      </Grid>
+    </Border>
+    <Grid Grid.Row="1" ColumnDefinitions="280,*" Margin="20" ColumnSpacing="18">
+      <Border Name="SidebarCard" Classes="card" Padding="18">
+        <Grid RowDefinitions="Auto,*,Auto">
+          <StackPanel Spacing="6" Margin="0,0,0,18">
+            <TextBlock Text="YOUR FOLDER" Classes="label" />
+            <TextBlock Text="Scan settings" FontSize="18" FontWeight="SemiBold" />
+          </StackPanel>
+          <ScrollViewer Name="SidebarScrollViewer" Grid.Row="1" AllowAutoHide="False"
+                        VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <ScrollViewer.Resources><x:Double x:Key="ScrollBarSize">10</x:Double></ScrollViewer.Resources>
+            <StackPanel Name="SidebarContent" Margin="0,0,14,4" Spacing="0">
+              <Button Name="ChooseButton" Content="Choose folder…" Height="36" HorizontalAlignment="Stretch" Click="ChooseFolder" />
+              <TextBox Name="FolderBox" PlaceholderText="Or paste a folder path" TextWrapping="Wrap" Height="68" AcceptsReturn="False" Margin="0,10,0,0"
+                       VerticalContentAlignment="Top" AutomationProperties.Name="Folder to scan" />
+              <TextBlock Text="INCLUDE IN SCAN" Classes="label" Margin="0,22,0,8" />
+              <CheckBox Name="OcrCheck" Content="Text inside images" IsChecked="True" />
+              <CheckBox Name="NamesCheck" Content="People’s names" IsChecked="True" />
+              <TextBlock Text="Images and scanned pages take longer. Files stay on this computer." Classes="muted" TextWrapping="Wrap" FontSize="11" LineHeight="16" Margin="0,8,0,16" />
+              <TextBlock Text="Maximum file size (MiB)" FontSize="12" Margin="0,0,0,7" />
+              <NumericUpDown Name="SizeLimit" Height="36" Minimum="1" Maximum="2048" Value="100" Increment="100" FormatString="0" AutomationProperties.Name="Maximum file size in MiB" />
+              <TextBlock Text="Parallel workers" FontSize="12" Margin="0,14,0,7" />
+              <NumericUpDown Name="WorkerCount" Height="36" Minimum="1" Maximum="8" Value="2" Increment="1" FormatString="0" AutomationProperties.Name="Parallel file workers"
+                             ToolTip.Tip="Files checked at the same time. Each worker may start its own document parser; lower this on laptops or when memory is limited." />
+              <TextBlock Text="Phone number regions" FontSize="12" Margin="0,14,0,7" />
+              <TextBox Name="PhoneRegionsBox" Height="36" Text="US,GB" AutomationProperties.Name="Phone number regions"
+                       ToolTip.Tip="Comma-separated ISO country codes used for phone numbers written without a country code, for example US,GB,DE. Numbers with a + prefix are always recognized." />
+              <Border Height="1" Background="{DynamicResource LineBrush}" Margin="0,20,0,18" />
+              <TextBlock Text="PDF REPORT" Classes="label" Margin="0,0,0,8" />
+              <CheckBox Name="HideFileNamesCheck" Content="Replace filenames with IDs" />
+              <CheckBox Name="ReportContextCheck" Content="Include surrounding context" />
+              <TextBlock Text="All findings are included. Identifying PDF metadata is omitted; visible PII remains." Classes="muted" TextWrapping="Wrap" FontSize="11" LineHeight="16" Margin="0,9,0,18" />
+              <TextBlock Text="Review, then decide" FontSize="12" FontWeight="SemiBold" />
+              <TextBlock Text="Detection can miss information. Review “Needs attention” for incomplete files." Classes="muted" TextWrapping="Wrap" FontSize="11" LineHeight="16" Margin="0,6,0,6" />
+            </StackPanel>
+          </ScrollViewer>
+          <StackPanel Grid.Row="2" Margin="0,14,0,0">
+            <Border Height="1" Background="{DynamicResource LineBrush}" Margin="0,0,0,14" />
+            <Grid ColumnDefinitions="*,68" ColumnSpacing="8">
+              <Button Name="ScanButton" Content="Scan folder" Classes="primary" Height="38" HorizontalAlignment="Stretch" Click="StartScan" />
+              <Button Name="StopButton" Grid.Column="1" Content="Stop" Height="38" HorizontalAlignment="Stretch" IsEnabled="False" Click="StopScan" />
+            </Grid>
+            <ProgressBar Name="ScanProgress" Height="3" Margin="0,12,0,0" Foreground="{DynamicResource AccentBrush}" />
+          </StackPanel>
+        </Grid>
+      </Border>
+      <Grid Grid.Column="1" RowDefinitions="80,38,*,156" RowSpacing="14">
+        <Grid ColumnDefinitions="*,*,*" ColumnSpacing="12">
+          <Border Classes="card" Padding="17,12"><StackPanel Spacing="5"><TextBlock Text="POTENTIAL PII" Classes="label" /><TextBlock Name="FindingCount" Text="0" FontSize="27" FontWeight="SemiBold" Foreground="{DynamicResource AccentBrush}" /></StackPanel></Border>
+          <Border Grid.Column="1" Classes="card" Padding="17,12"><StackPanel Spacing="5"><TextBlock Text="FILES PROCESSED" Classes="label" /><TextBlock Name="FileCount" Text="0" FontSize="27" FontWeight="SemiBold" /></StackPanel></Border>
+          <Border Grid.Column="2" Classes="card" Padding="17,12"><StackPanel Spacing="5"><TextBlock Text="NEED ATTENTION" Classes="label" /><TextBlock Name="IssueCount" Text="0" FontSize="27" FontWeight="SemiBold" Foreground="{DynamicResource WarningBrush}" /></StackPanel></Border>
+        </Grid>
+        <Grid Grid.Row="1" ColumnDefinitions="*,158,148" ColumnSpacing="10">
+          <TextBox Name="SearchBox" Height="38" PlaceholderText="Search findings or files…" TextChanged="FilterChanged" AutomationProperties.Name="Search findings and attention items" />
+          <ComboBox Name="TypeFilter" Grid.Column="1" Height="38" HorizontalAlignment="Stretch" SelectionChanged="TypeChanged" AutomationProperties.Name="PII type filter" />
+          <Button Name="ExportButton" Grid.Column="2" Content="Save PDF report…" Height="38" HorizontalAlignment="Stretch" IsEnabled="False" Click="ExportReport" ToolTip.Tip="Export all findings and attention items, including results hidden by filters." />
+        </Grid>
+        <Border Grid.Row="2" Classes="card" Padding="8,0,8,8">
+          <Grid>
+            <TabControl Name="ResultsTabs">
+              <TabItem Header="Findings">
+                <DataGrid Name="FindingsGrid" AutoGenerateColumns="False" IsReadOnly="True"
+                          SelectionMode="Single" SelectionChanged="FindingSelected" CanUserResizeColumns="True" CanUserSortColumns="True">
+                  <DataGrid.Columns>
+                    <DataGridTextColumn Header="Type" Binding="{Binding Type}" Width="200" MinWidth="200" />
+                    <DataGridTextColumn Header="Value" Binding="{Binding Value}" Width="2*" MinWidth="170" />
+                    <DataGridTextColumn Header="File" Binding="{Binding FileName}" Width="*" MinWidth="130" />
+                    <DataGridTextColumn Header="Inside file / archive" Binding="{Binding Source}" Width="*" MinWidth="145" />
+                  </DataGrid.Columns>
+                </DataGrid>
+              </TabItem>
+              <TabItem Header="Needs attention">
+                <DataGrid Name="IssuesGrid" AutoGenerateColumns="False" IsReadOnly="True" SelectionChanged="IssueSelected">
+                  <DataGrid.Columns>
+                    <DataGridTextColumn Header="Source" Binding="{Binding DisplaySource}" Width="*" MinWidth="150" />
+                    <DataGridTextColumn Header="What happened" Binding="{Binding Message}" Width="2*" MinWidth="230" />
+                  </DataGrid.Columns>
+                </DataGrid>
+              </TabItem>
+            </TabControl>
+            <Border Name="EmptyState" Background="{DynamicResource SurfaceBrush}" Margin="0,49,0,0" IsHitTestVisible="False">
+              <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="10" Margin="20">
+                <TextBlock Text="See what your files contain" FontSize="20" FontWeight="SemiBold" TextAlignment="Center" TextWrapping="Wrap" />
+                <TextBlock Text="Choose a folder and start a scan.&#10;Findings appear here as files are read." TextAlignment="Center" Classes="muted" FontSize="12" LineHeight="19" TextWrapping="Wrap" />
+              </StackPanel>
+            </Border>
+          </Grid>
+        </Border>
+        <Border Grid.Row="3" Classes="card" Padding="16,14">
+          <Grid RowDefinitions="Auto,Auto,*,Auto">
+            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
+              <TextBlock Text="SELECTED FINDING" Classes="label" />
+              <TextBlock Name="MethodText" Grid.Column="1" Classes="muted" FontSize="11" HorizontalAlignment="Right" TextTrimming="CharacterEllipsis" />
+            </Grid>
+            <TextBlock Name="SourceText" Grid.Row="1" Text="Select a result to review its source and context." TextTrimming="CharacterEllipsis" Margin="0,8,0,5" FontSize="12" />
+            <TextBlock Name="ContextText" Grid.Row="2" TextWrapping="Wrap" MaxHeight="38" FontSize="12" />
+            <Grid Grid.Row="3" ColumnDefinitions="Auto,Auto,*" ColumnSpacing="8" Margin="0,8,0,0">
+              <Button Name="RevealButton" Content="Show source file" IsEnabled="False" MinHeight="30" Height="30" Padding="10,4" FontSize="11" Click="RevealFile" />
+              <Button Name="CopyButton" Grid.Column="1" Content="Copy value" IsEnabled="False" MinHeight="30" Height="30" Padding="10,4" FontSize="11" Click="CopyValue" />
+              <TextBlock Name="LocationText" Grid.Column="2" VerticalAlignment="Center" Classes="muted" FontSize="10" TextTrimming="CharacterEllipsis" />
+            </Grid>
+          </Grid>
+        </Border>
+      </Grid>
+    </Grid>
+    <Border Grid.Row="2" Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="0,1,0,0" Padding="22,0">
+      <TextBlock Name="StatusText" Text="Ready. Your source files will not be changed." VerticalAlignment="Center" Classes="muted" FontSize="11" TextTrimming="CharacterEllipsis" />
+    </Border>
+  </Grid>
+</Window>

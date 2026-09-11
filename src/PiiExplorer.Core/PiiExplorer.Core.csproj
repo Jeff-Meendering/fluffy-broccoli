@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <!-- Checksum, binary-string and normalization helpers are internal implementation detail,
+         but each needs direct regression coverage rather than only end-to-end assertions. -->
+    <InternalsVisibleTo Include="PiiExplorer.Tests" />
+    <EmbeddedResource Include="Fonts/NotoSans-Regular.ttf" />
+    <PackageReference Include="libphonenumber-csharp" Version="9.0.39" />
+    <PackageReference Include="Microsoft.ML.OnnxRuntime" Version="1.29.0" />
+    <PackageReference Include="SharpCompress" Version="0.50.4" />
+    <PackageReference Include="SkiaSharp" Version="3.119.4" />
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux" Version="3.119.4" />
+  </ItemGroup>
+</Project>

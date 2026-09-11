@@ -1,0 +1,148 @@
+using System.Text;
+using PiiExplorer.Core;
+using Xunit;
+
+namespace PiiExplorer.Tests;
+
+public sealed class ReportTests : IDisposable
+{
+    private readonly string _temp = Path.Combine(Path.GetTempPath(), "PiiReportTests", Guid.NewGuid().ToString("N"));
+    public ReportTests() => Directory.CreateDirectory(Path.Combine(_temp, "source"));
+    public void Dispose() => Directory.Delete(_temp, true);
+
+    private ReportSnapshot Snapshot(bool aliases = false, bool context = false)
+    {
+        string root = Path.Combine(_temp, "source");
+        return new(root, [
+            new(Path.Combine(root, "HR", "contacts.txt"), "", "text · character 0", "Email", "report.check@example.com", "Secret surrounding context", .99, "Pattern"),
+            new(Path.Combine(root, "Finance", "contacts.txt"), "", "text", "Person", "José Muñoz", "Unshared context", .92, "Local model"),
+            new(Path.Combine(root, "backup.rar"), "staff/contacts.txt", "text", "Email", "archive.check@example.com", "", .99, "Pattern")
+        ], [new(Path.Combine(root, "locked.zip"), "inside.txt", "Cannot open C:\\Users\\ReportHostUser\\Documents\\locked.zip")],
+            new(4, 4, 3, 1, TimeSpan.FromSeconds(10), false), new(), new(aliases, context));
+    }
+
+    [Fact] public async Task PdfHasNoIdentifyingMetadataAndPreservesSourcesAndUnicode()
+    {
+        var snapshot = Snapshot();
+        string path = Path.Combine(_temp, "report.pdf");
+        PdfReport.Save(path, snapshot);
+        byte[] bytes = File.ReadAllBytes(path);
+        string raw = Encoding.Latin1.GetString(bytes);
+        Assert.StartsWith("%PDF-", raw);
+        foreach (string key in new[] { "/Author", "/Creator", "/Producer", "/CreationDate", "/ModDate", "/Metadata", "/EmbeddedFiles", "/JavaScript", "/ID " })
+            Assert.DoesNotContain(key, raw);
+        Assert.DoesNotContain("ReportHostUser", raw);
+        string text = await Extract(path);
+        Assert.Contains("report.check@example.com", text);
+        Assert.Contains("archive.check@example.com", text);
+        Assert.Contains("José Muñoz", text);
+        Assert.Contains("HR/contacts.txt", text);
+        Assert.Contains("Finance/contacts.txt", text);
+        Assert.Contains("staff/contacts.txt", text);
+        Assert.DoesNotContain("ReportHostUser", text);
+        Assert.DoesNotContain(_temp, text);
+        Assert.DoesNotContain("Secret surrounding context", text);
+    }
+
+    [Fact] public async Task AliasModeOmitsFilenamesAndKeepsDistinctTraceableIds()
+    {
+        var snapshot = Snapshot(aliases: true);
+        string path = Path.Combine(_temp, "aliases.pdf");
+        PdfReport.Save(path, snapshot);
+        string text = await Extract(path);
+        foreach (string value in new[] { "contacts.txt", "backup.rar", "locked.zip", "inside.txt", "ReportHostUser" })
+            Assert.DoesNotContain(value, text);
+        var labels = PdfReport.SourceLabels(snapshot);
+        Assert.Equal(4, labels.Values.Distinct().Count());
+        foreach (string label in labels.Values) Assert.Contains(label, text);
+    }
+
+    [Fact] public async Task ArbitraryUnixAndNestedAbsolutePathsAreOmitted()
+    {
+        var snapshot = Snapshot();
+        snapshot = snapshot with { Findings = [snapshot.Findings[0] with {
+            Source = @"C:\Users\PrivateHost\one.zip > /srv/PrivateUser/secret.txt",
+            Location = "metadata: /root-secret", Value = "report.check@example.com"
+        }], Issues = [new(snapshot.Issues[0].FilePath, "//PrivateServer/Share/secret.txt", "Cannot read /opt/PrivateUser/hidden.txt")] };
+        string path = Path.Combine(_temp, "paths.pdf"); PdfReport.Save(path, snapshot);
+        string text = await Extract(path);
+        foreach (string secret in new[] { "PrivateHost", "PrivateUser", "PrivateServer", "root-secret", "hidden.txt" })
+            Assert.DoesNotContain(secret, text);
+        Assert.Contains("report.check@example.com", text);
+    }
+
+    [Fact] public void DestinationCreatedDuringRenderingIsNeverReplaced()
+    {
+        var snapshot = Snapshot();
+        snapshot = snapshot with { Findings = Enumerable.Range(0, 260).Select(i => snapshot.Findings[0] with { Value = $"person{i}@example.com" }).ToArray() };
+        string destination = Path.Combine(_temp, "appeared.pdf");
+        Assert.Throws<IOException>(() => PdfReport.Save(destination, snapshot, default,
+            new App.InlineProgress<int>(_ => File.WriteAllText(destination, "source appeared during export"))));
+        Assert.Equal("source appeared during export", File.ReadAllText(destination));
+        Assert.Empty(Directory.GetFiles(_temp, ".pii-export-*"));
+    }
+
+    [Fact] public async Task PartialAndEmptyReportsDoNotClaimCleanScan()
+    {
+        var snapshot = Snapshot() with { Findings = [], Issues = [], Summary = new(7, 2, 0, 0, TimeSpan.Zero, true) };
+        string path = Path.Combine(_temp, "partial.pdf");
+        PdfReport.Save(path, snapshot);
+        string text = await Extract(path);
+        Assert.Contains("PARTIAL SCAN", text);
+        Assert.Contains("2 / 7 files processed", text);
+        Assert.Contains("may not have been checked", text);
+    }
+
+    [Fact] public void ExportCannotOverwriteSourceOrDamageExistingReportOnCancellation()
+    {
+        var snapshot = Snapshot();
+        string source = Path.Combine(snapshot.Root, "clean.pdf");
+        File.WriteAllText(source, "source even without findings");
+        Assert.Throws<IOException>(() => PdfReport.Save(source, snapshot));
+        Assert.Equal("source even without findings", File.ReadAllText(source));
+        string destination = Path.Combine(_temp, "existing.pdf");
+        File.WriteAllText(destination, "previous report");
+        using var cancellation = new CancellationTokenSource(); cancellation.Cancel();
+        Assert.ThrowsAny<OperationCanceledException>(() => PdfReport.Save(destination, snapshot, cancellation.Token));
+        Assert.Equal("previous report", File.ReadAllText(destination));
+        Assert.Empty(Directory.GetFiles(_temp, ".pii-export-*"));
+    }
+
+    [Fact] public void CancellationDuringRenderingPreservesExistingReportAndCleansStaging()
+    {
+        var snapshot = Snapshot();
+        snapshot = snapshot with { Findings = Enumerable.Range(0, 300).Select(i => snapshot.Findings[0] with { Value = $"person{i}@example.com" }).ToArray() };
+        string destination = Path.Combine(_temp, "existing.pdf"); File.WriteAllText(destination, "previous report");
+        using var cancellation = new CancellationTokenSource();
+        Assert.ThrowsAny<OperationCanceledException>(() => PdfReport.Save(destination, snapshot, cancellation.Token,
+            new App.InlineProgress<int>(_ => cancellation.Cancel())));
+        Assert.Equal("previous report", File.ReadAllText(destination));
+        Assert.Empty(Directory.GetFiles(_temp, ".pii-export-*"));
+    }
+
+    [Fact] public async Task MultipageLongValuesRemainCompleteAndCreateVisualQaSample()
+    {
+        var snapshot = Snapshot(context: true);
+        var findings = Enumerable.Range(0, 18).Select(i => snapshot.Findings[i % 3] with {
+            Value = i == 5 ? new string('W', 180) + "END-OF-LONG-VALUE" : i == 6 ? "李明" : snapshot.Findings[i % 3].Value
+        }).ToArray();
+        snapshot = snapshot with { Findings = findings, Summary = snapshot.Summary with { Findings = findings.Length } };
+        string path = Path.Combine(_temp, "multipage.pdf"); PdfReport.Save(path, snapshot);
+        string text = await Extract(path);
+        Assert.Contains("END-OF-LONG-VALUE", text);
+        Assert.Contains("[U+674E][U+660E]", text);
+        Assert.Contains("Secret surrounding context", text);
+        Assert.Contains("18.", text);
+        string output = Path.Combine(TestPaths.Root, "test-results"); Directory.CreateDirectory(output);
+        File.Copy(path, Path.Combine(output, "report-layout.pdf"), overwrite: true);
+    }
+
+    private static async Task<string> Extract(string path)
+    {
+        using var client = new ExtractionClient(TestPaths.Assets);
+        var text = new StringBuilder();
+        await foreach (var part in client.ReadAsync(path, false, default))
+            if (part.Location.StartsWith("document text")) text.AppendLine(part.Text);
+        return text.ToString();
+    }
+}

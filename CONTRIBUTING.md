@@ -1,0 +1,13 @@
+# Development and checkpoints
+
+Use Windows x64, PowerShell 7, the .NET SDK 10.0.301 (pinned in `global.json`) and 7-Zip for the verified development path. Downloading build dependencies requires network access; ordinary scans and bundled model inference run locally. Start with the asset preparation commands in README.md, then run `./scripts/Test.ps1`. This checks locked restores (including the benchmark project), audits NuGet dependencies, builds, and runs the Release tests. Treat reported audit failures as actionable; the audit does not cover every bundled Java/native dependency.
+
+`src/PiiExplorer.Core` contains extraction, detection, evaluation and reporting. `src/PiiExplorer.App` contains the Avalonia UI and diagnostic commands. `worker/ExtractionWorker.java` bridges Apache Tika; rebuild it after changing Java code. `tests/PiiExplorer.Tests` contains unit, integration and headless UI tests. `tools/PiiExplorer.Benchmarks` measures synthetic workloads. Run benchmarks without concurrent tests/builds and record hardware, options, repeated timings, findings and attention counts.
+
+Add positive, negative, malformed and boundary cases for detection changes. A checksum or a high heuristic score does not establish that an identifier is real. Keep original evidence and offsets; report extraction failures and limits. Do not tune against a held-out comparison corpus. Use synthetic reproductions in issues and test files; keep analyst case data and exported findings outside the repository.
+
+The Windows GitHub workflow prepares pinned assets, runs the tests, and smoke-tests the portable package. It has read-only repository permissions and does not publish a release. Its first hosted run must pass before treating hosted CI as verified. Native window rendering and Windows Sandbox behavior still require interactive testing.
+
+Before saving a checkpoint, run `git status --short` and `git add --dry-run .` and review the proposed file list. Build assets, archives, local case/report directories, and test output are ignored. Only the explicitly documented synthetic fixtures belong under `tests/fixtures`; `.gitignore` cannot identify real PII in an arbitrarily named file. Keep the lock files and third-party notices. Use `scripts/Publish.ps1`, `scripts/Test-WindowsPackage.ps1`, and `scripts/Make-Archives.ps1 -Runtime win-x64` for a tested package; a Git source checkout does not contain downloaded runtimes.
+
+The project does not yet declare a license for its own source. Choose one deliberately before presenting it as open source. Third-party license notices describe their respective components, not a license grant for this application. Saving progress in a private repository does not require assigning an open-source license.

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<directory>
+  <person>
+    <name>Maria Hernandez</name>
+    <email>maria.hernandez@example.com</email>
+    <phone>415-555-0142</phone>
+  </person>
+  <person>
+    <name>David Okonkwo</name>
+    <email>d.okonkwo@example.org</email>
+    <phone>(212) 555-0177</phone>
+  </person>
+</directory>

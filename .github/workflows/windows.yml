@@ -1,0 +1,45 @@
+name: Windows verification
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: windows-2025
+    timeout-minutes: 30
+    env:
+      AVALONIA_TELEMETRY_OPTOUT: '1'
+      DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+      - name: Prepare pinned extraction runtimes
+        run: |
+          ./scripts/Get-Assets.ps1
+          ./scripts/Build-Worker.ps1
+          ./scripts/Prepare-WindowsRuntime.ps1
+      - name: Restore, audit, build and test
+        run: ./scripts/Test.ps1
+      - name: Verify the self-contained Windows package
+        run: |
+          ./scripts/Collect-Licenses.ps1
+          ./scripts/Publish.ps1 -Runtime win-x64
+          ./scripts/Test-WindowsPackage.ps1
+          ./scripts/Make-Archives.ps1 -Runtime win-x64
+          ./scripts/Verify-Package.ps1 -PackageFolder ./dist/win-x64

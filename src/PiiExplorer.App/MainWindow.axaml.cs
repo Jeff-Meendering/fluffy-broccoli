@@ -261,6 +261,7 @@ public partial class MainWindow : Window
         try {
             var start = new ProcessStartInfo { UseShellExecute = false, CreateNoWindow = true };
             if (OperatingSystem.IsWindows()) { start.FileName = "explorer.exe"; start.ArgumentList.Add("/select," + _sourceFile); }
+            else if (OperatingSystem.IsMacOS()) { start.FileName = "/usr/bin/open"; start.ArgumentList.Add("-R"); start.ArgumentList.Add(_sourceFile); }
             else { start.FileName = "xdg-open"; start.ArgumentList.Add(Directory.Exists(_sourceFile) ? _sourceFile : Path.GetDirectoryName(_sourceFile)!); }
             Process.Start(start);
         } catch (Exception error) { StatusText.Text = "Could not open file manager: " + error.Message; }

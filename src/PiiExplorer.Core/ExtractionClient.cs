@@ -40,7 +40,7 @@ public sealed class ExtractionClient(RuntimePaths paths) : IDisposable
         start.Environment["TESSDATA_PREFIX"] = Path.Combine(paths.OcrDirectory, "tessdata");
         start.Environment["OMP_THREAD_LIMIT"] = "1";
         foreach (string variable in new[] { "TEMP", "TMP", "TMPDIR" }) start.Environment[variable] = _tempDirectory.FullName;
-        if (!OperatingSystem.IsWindows()) start.Environment["LD_LIBRARY_PATH"] = Path.Combine(paths.OcrDirectory, "lib") + ":" + Environment.GetEnvironmentVariable("LD_LIBRARY_PATH");
+        if (OperatingSystem.IsLinux()) start.Environment["LD_LIBRARY_PATH"] = Path.Combine(paths.OcrDirectory, "lib") + ":" + Environment.GetEnvironmentVariable("LD_LIBRARY_PATH");
         _process = new Process { StartInfo = start };
         _process.Start();
         _position = _length = 0;

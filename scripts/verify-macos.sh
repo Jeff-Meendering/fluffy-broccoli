@@ -5,6 +5,10 @@ project_dir="$(cd "$(dirname "$0")/.." && pwd)"
 case "$(uname -m)" in arm64) runtime=osx-arm64 ;; x86_64) runtime=osx-x64 ;; *) exit 1 ;; esac
 binary="$project_dir/dist/$runtime/PII Explorer.app/Contents/MacOS/PiiExplorer"
 [[ -x "$binary" ]] || { echo 'Run scripts/publish-macos.sh first.' >&2; exit 1; }
+contents="$project_dir/dist/$runtime/PII Explorer.app/Contents"
+for required in LICENSE NOTICE; do
+    [[ -s "$contents/$required" ]] || { echo "Package is missing $required" >&2; exit 1; }
+done
 mkdir -p "$project_dir/test-results"
 output="$project_dir/test-results/macos-package.jsonl"
 cd /tmp

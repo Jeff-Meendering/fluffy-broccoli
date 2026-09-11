@@ -20,6 +20,12 @@ foreach ($line in [IO.File]::ReadLines($manifest)) {
     $count++
 }
 if ($count -eq 0) { throw 'Empty checksum manifest' }
+# A redistributed binary must carry its own license, not only third-party notices.
+foreach ($required in @('LICENSE', 'NOTICE')) {
+    $licensePath = Join-Path $packagePath $required
+    if (!$expected.Contains($licensePath)) { throw "Package is missing $required" }
+    if ((Get-Item -LiteralPath $licensePath).Length -lt 100) { throw "$required is empty or truncated" }
+}
 foreach ($file in Get-ChildItem -LiteralPath $packagePath -File -Recurse -Force) {
     if ($file.FullName -ne $manifest -and !$expected.Contains($file.FullName)) { throw 'Package contains an unlisted file; extract the ZIP into a new empty folder' }
 }

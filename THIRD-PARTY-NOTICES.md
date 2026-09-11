@@ -1,6 +1,8 @@
 # Third-party components
 
-PII Explorer uses the components below. Preserve this file, the `licenses` directory, and runtime legal notices when redistributing a package. This inventory is not a claim that every native/transitive dependency has received a complete license or security review.
+PII Explorer's own source is licensed under the Apache License 2.0; see [LICENSE](LICENSE) and [NOTICE](NOTICE). This file covers third-party components only.
+
+PII Explorer uses the components below. Preserve this file, the `LICENSE` and `NOTICE` files, the `licenses` directory, and runtime legal notices when redistributing a package. This inventory is not a claim that every native/transitive dependency has received a complete license or security review.
 
 | Component | Pinned or observed version | Notices / source |
 | --- | --- | --- |

@@ -20,5 +20,7 @@ for doc in /usr/share/doc/*/copyright; do
 done
 cp /etc/os-release "$package_dir/licenses/linux/build-system.txt"
 dpkg-query -W > "$package_dir/licenses/linux/build-packages.txt"
+# A redistributed binary carries its own license alongside the collected notices.
+cp "$project_dir/LICENSE" "$project_dir/NOTICE" "$project_dir/SECURITY.md" "$package_dir/"
 chmod +x "$package_dir/PiiExplorer" "$package_dir/assets/ocr/tesseract" "$package_dir/assets/java/bin/"*
 echo "Linux runtime bundled in $package_dir"

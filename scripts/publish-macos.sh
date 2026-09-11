@@ -23,7 +23,7 @@ dotnet publish src/PiiExplorer.App -c Release -r "$runtime" --self-contained tru
     -p:PublishSingleFile=true "-p:NuGetLockFilePath=$lock" "-p:RestoreLockedMode=$locked" -o "$binary_dir"
 cp -R assets "$binary_dir/assets"
 cp -R licenses "$app/Contents/licenses"
-cp README.md THIRD-PARTY-NOTICES.md "$app/Contents/"
+cp README.md THIRD-PARTY-NOTICES.md LICENSE NOTICE SECURITY.md "$app/Contents/"
 brew list --versions > "$app/Contents/homebrew-versions.txt"
 cat > "$app/Contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>

@@ -285,7 +285,6 @@ public sealed class DetectionCoverageTests
     public void CheckDigitsRejectMostRandomNumbersOfTheSameShape()
     {
         // A single check digit admits about one candidate in ten. Anything close to full
-        // acceptance would mean the validator is not constraining the value at all.
         var random = new Random(11);
         int aadhaar = 0, china = 0, pesel = 0;
         for (int i = 0; i < 4000; i++)

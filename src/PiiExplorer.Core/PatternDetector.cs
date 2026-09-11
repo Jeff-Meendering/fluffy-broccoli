@@ -7,7 +7,6 @@ namespace PiiExplorer.Core;
 
 public sealed class PatternDetector
 {
-    // A validator returns the finding's confidence; zero or less rejects the candidate.
     private delegate double Validator(string text, int start, string value);
     private sealed record Rule(string Type, Regex Pattern, double Score, Validator? Validate = null,
         bool ValueOnly = false, Func<string, int, bool>? When = null, string Method = "Pattern");
@@ -16,8 +15,6 @@ public sealed class PatternDetector
     private static bool Has(string text, string value) => text.Contains(value, StringComparison.OrdinalIgnoreCase);
 
     internal static readonly Regex LabelledName = Rx(@"(?im)\bFull[ \t]+name[ \t]*:[ \t]*(?<value>[\p{L}][\p{L}\p{M}.'’ \t-]{0,100}?)(?=[ \t]*(?:\||\r?$))");
-    // Explicit person labels with at least two capitalized words. Bare "name:" is excluded
-    // because file, product and field names use the same label.
     private static readonly Regex LabelledPersonName = Rx(@"(?im)(?:^[ \t]*name|\b(?:full|first|last|contact|patient|employee|customer|applicant|member|legal|your|my)[ \t]+name|\b(?:surname|family[ \t]+name|given[ \t]+name|attn|attention|employee|customer|patient|applicant|cardholder|account[ \t]+holder|beneficiary|borrower|insured|tenant|claimant|signed|prepared[ \t]+by))[ \t]*:[ \t]*(?<value>[\p{Lu}][\p{L}\p{M}'’.-]*(?:[ \t]+[\p{Lu}][\p{L}\p{M}'’.-]*){1,4})(?=[ \t]*(?:[|<(,]|\r?$))");
     private static readonly Regex EmailAssignment = Rx(@"(?i)\A(?:email|e-mail|mail|user|username|value|contact)=");
     private const string Months = @"(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)";
@@ -27,22 +24,16 @@ public sealed class PatternDetector
         new("Person", LabelledName, .85, ValueOnly: true, When: (t, _) => Has(t, "full")),
         new("Person", LabelledPersonName, .70, ValueOnly: true, When: (t, _) => Has(t, "name") || Has(t, "attn") || Has(t, "attention") || Has(t, "employee") || Has(t, "customer") || Has(t, "patient") || Has(t, "applicant") || Has(t, "holder") || Has(t, "beneficiary") || Has(t, "borrower") || Has(t, "insured") || Has(t, "tenant") || Has(t, "claimant") || Has(t, "signed") || Has(t, "prepared")),
         // Consume the whole candidate before validating: never report a valid-looking prefix
-        // of a malformed address. Atomic groups and matching left boundaries avoid retries
-        // at every character of long local-part punctuation runs. The last label must be
-        // alphabetic or IDNA-encoded so package versions such as lodash@4.17.21 are not addresses.
         new("Email", Rx(@"(?<![\w.!#$%&'*+/=?^`{|}~@-])(?>[\w.!#$%&'*+/=?^`{|}~-]+)@(?>(?:[\p{L}\p{M}0-9_-]+\.)+(?:(?i:xn--)[A-Za-z0-9-]{1,59}|[\p{L}\p{M}]{2,63}))(?![\w@-]|\.[\w.-])"), .99, Email, When: (t, _) => t.Contains('@')),
         // Structurally invalid SSNs (area 000/666/9xx, group 00, serial 0000) stay visible at
-        // low confidence: test data and redactions are still worth review, not silent discards.
         new("Social Security number", Rx(@"(?<![\w-])\d{3}-\d{2}-\d{4}(?![\w-])"), .8, SsnDashed, When: (_, d) => d >= 9),
         new("Social Security number", Rx(@"(?i)\b(?:ssn|social[ _\t]+security)(?:[ _\t]+(?:number|no\.?))?(?=[ \t:=#])[ \t]*(?:[:=#][ \t]*)?(?<value>\d{3}[ -]?\d{2}[ -]?\d{4})(?![\w-])"), .9, SsnLabelled, ValueOnly: true, When: (t, d) => d >= 9 && (Has(t, "ssn") || Has(t, "social"))),
         new("Social Security number", Rx(@"(?<![\w-])\d{3} \d{2} \d{4}(?![\w-])"), .55, SsnSpaced, When: (_, d) => d >= 9),
         new("Payment card", Rx(@"(?<!\d)(?:[0-9][   -]?){12,18}[0-9](?!\d)"), .90, Card, When: (_, d) => d >= 13),
         // Consume IPv6 before IPv4 so mapped addresses yield one span. TryParse validates
-        // compression/group counts offline; numeric scope IDs do not require interface lookup.
         new("IP address", Rx(@"(?<![\w:.%])(?>[A-Fa-f0-9]*:[A-Fa-f0-9:]+(?:(?:\.[0-9]+){3})?(?:%[0-9]+)?)(?![\w:%]|\.[\w.])|(?<![\d.])(?:\d{1,3}\.){3}\d{1,3}(?![\d.])"), .8, Ip, When: (t, d) => d >= 4 || t.Contains(':')),
         new("Date of birth", Rx(@"(?i)\b(?:d\.?o\.?b\.?|date[_\s]+of[_\s]+birth|birth[_\s]*date|birthday|born(?:[_\s]+on)?)(?![\p{L}\d])[_\s]*[:=\-]?\s*(?:\d{1,4}[-/.]\d{1,2}[-/.]\d{1,4}|\d{1,2}(?:st|nd|rd|th)?[-/ .]*" + Months + @"\.?,?[-/ .]*\d{2,4}|" + Months + @"\.?[ .]*\d{1,2}(?:st|nd|rd|th)?,?[ .]*\d{2,4})(?!\d)"), .9, When: (t, d) => d >= 4 && (Has(t, "birth") || Has(t, "dob") || Has(t, "born") || Has(t, "d.o.b"))),
         // The first street word must be capitalized or numbered: prose such as "a 2 hour drive"
-        // otherwise matches, while written addresses are almost always capitalized.
         new("Street address", Rx(@"(?i)\b\d{1,6}[a-z]?\s+(?-i:[\p{Lu}\d])[\p{L}\d.'’-]*\s+(?:[\p{L}\d][\p{L}\d.'’-]*\s+){0,4}" + StreetSuffix + @"(?![\p{L}\d])\.?(?:,?\s+(?:n|s|e|w|ne|nw|se|sw|north|south|east|west)(?![\p{L}\d])\.?)?(?:,?\s+(?:apt|apartment|suite|ste|unit|floor|fl|bldg|building|#)\.?\s*#?\s*[\w-]{1,8}(?![\w-]))?"), .8, When: (_, d) => d >= 1),
         new("Street address", Rx(@"(?i)\b(?:p\.?\s?o\.?\s+box|post\s+office\s+box|pob)\s*#?\s*\d{1,6}(?![\p{L}\d])"), .8, When: (t, d) => d >= 1 && (Has(t, "box") || Has(t, "pob"))),
         new("Street address", Rx(@"(?i)\b\d{1,4}(?:\s?(?:bis|ter))?,?\s+(?:rue|avenue|boulevard|bd|place|chemin|allée|allee|impasse|quai|cours|passage)\s+(?:[\p{L}][\p{L}'’-]*(?:\s+|(?=[,.;\r\n]|$))){1,6}?(?=[,.;\r\n]|\s*\d|$)"), .7, When: (_, d) => d >= 1),
@@ -53,7 +44,6 @@ public sealed class PatternDetector
         new("Labelled identifier", Rx(@"(?i)\b(?:(?:passport|driver['’]?s?[ \t]+licen[cs]e|driving[ \t]+licen[cs]e)(?:[ \t]+(?:number|no\.?))?|account[ \t]+(?:number|no\.?)|routing[ \t]+(?:number|no\.?)|tax[ \t]+id|national[ \t]+id(?:[ \t]+(?:number|no\.?))?|id[ \t]+number|medical[ \t]+record[ \t]+(?:number|no\.?)|mrn|patient[ \t]+(?:id|number)|member[ \t]+(?:id|number)|policy[ \t]+(?:number|no\.?))[ \t]*[:=#][ \t]*(?>[A-Z0-9](?:[A-Z0-9-]|[ \t](?=[0-9])){3,24}[A-Z0-9])(?![\w-])"), .65, (_, _, v) => v.Any(char.IsAsciiDigit) ? .65 : 0, When: (t, d) => d >= 1 && (Has(t, "passport") || Has(t, "licen") || Has(t, "account") || Has(t, "routing") || Has(t, "tax") || Has(t, "id") || Has(t, "mrn") || Has(t, "medical") || Has(t, "patient") || Has(t, "member") || Has(t, "policy"))),
         new("MAC address", Rx(@"(?<![0-9A-Fa-f:.-])(?:[0-9A-Fa-f]{2}([:-])(?:[0-9A-Fa-f]{2}\1){4}[0-9A-Fa-f]{2}|[0-9A-Fa-f]{4}\.[0-9A-Fa-f]{4}\.[0-9A-Fa-f]{4})(?![0-9A-Fa-f:.-])"), .7, Mac, When: (t, _) => t.Contains(':') || t.Contains('-') || t.Contains('.')),
         // Credentials: fixed-prefix tokens have near-zero collision rates. Labelled secrets are
-        // the exception and are filtered against placeholders and prose.
         new("Credential", Rx(@"(?<![A-Za-z0-9/+])(?:AKIA|ASIA)[A-Z0-9]{16}(?![A-Za-z0-9/+])"), .9, When: (t, _) => t.Contains("AKIA") || t.Contains("ASIA"), Method: "Pattern (AWS access key)"),
         new("Credential", Rx(@"\b(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9]{36,255}\b|\bgithub_pat_[A-Za-z0-9_]{22,255}\b"), .95, When: (t, _) => t.Contains("gh") , Method: "Pattern (GitHub token)"),
         new("Credential", Rx(@"\bxox[abpors]-[A-Za-z0-9-]{10,250}"), .9, When: (t, _) => t.Contains("xox"), Method: "Pattern (Slack token)"),
@@ -62,13 +52,11 @@ public sealed class PatternDetector
         new("Credential", Rx(@"-----BEGIN (?:[A-Z]+ )?PRIVATE KEY(?: BLOCK)?-----"), .95, When: (t, _) => t.Contains("PRIVATE KEY"), Method: "Pattern (private key)"),
         new("Credential", Rx(@"(?<![A-Za-z0-9_-])eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}(?![A-Za-z0-9_-])"), .85, When: (t, _) => t.Contains("eyJ"), Method: "Pattern (JSON Web Token)"),
         // The label may carry a prefix (db_password, X-Api-Key), so an underscore or hyphen
-        // before it still counts as a boundary.
         new("Credential", Rx(@"(?i)(?<![\p{L}\d])[\w.-]{0,20}?(?:password|passwd|pwd|passphrase|secret|api[_-]?key|access[_-]?token|auth[_-]?token|client[_-]?secret|private[_-]?key)(?![\p{L}\d])[ \t]*[:=][ \t]*[""']?(?<value>[^\s""'<>,;]{8,128})"), .6, Secret, ValueOnly: true, When: (t, _) => Has(t, "pass") || Has(t, "secret") || Has(t, "key") || Has(t, "token"), Method: "Pattern (labelled secret)"),
         new("Crypto wallet", Rx(@"(?<![A-Za-z0-9])[13][a-km-zA-HJ-NP-Z1-9]{25,34}(?![A-Za-z0-9])"), .95, CryptoWallets.Bitcoin, Method: "Pattern (Bitcoin address)"),
         new("Crypto wallet", Rx(@"(?i)(?<![A-Za-z0-9])(?:bc|tb)1[ac-hj-np-z02-9]{11,87}(?![A-Za-z0-9])"), .95, CryptoWallets.Bech32, When: (t, _) => Has(t, "bc1") || Has(t, "tb1"), Method: "Pattern (Bitcoin address)"),
         new("Crypto wallet", Rx(@"(?<![A-Za-z0-9])0x[0-9a-fA-F]{40}(?![A-Za-z0-9])"), .95, CryptoWallets.Ethereum, When: (t, _) => t.Contains("0x"), Method: "Pattern (Ethereum address)"),
         // National identifiers are only reported when their check digits verify. Nine-digit
-        // formats that collide with other numbers additionally require an explicit label.
         new("National ID", Rx(@"(?<![\w.-])\d{3}\.\d{3}\.\d{3}-\d{2}(?![\w-])"), .9, NationalIds.Cpf, When: (_, d) => d >= 11, Method: "Pattern (Brazil CPF)"),
         new("National ID", Rx(@"(?<![\w-])[2-9]\d{3}[ -]\d{4}[ -]\d{4}(?![\w-])"), .85, NationalIds.Aadhaar, When: (_, d) => d >= 12, Method: "Pattern (India Aadhaar)"),
         new("National ID", Rx(@"(?i)\bNHS(?:[ \t]+(?:number|no\.?))?[ \t]*[:#=]?[ \t]*(?<value>\d{3}[ -]?\d{3}[ -]?\d{4})(?![\w-])"), .85, NationalIds.Nhs, ValueOnly: true, When: (t, d) => d >= 10 && Has(t, "nhs"), Method: "Pattern (UK NHS number)"),
@@ -88,8 +76,6 @@ public sealed class PatternDetector
     private static readonly PhoneNumberUtil PhoneUtil = PhoneNumberUtil.GetInstance();
     private readonly string[] _phoneRegions;
 
-    /// <param name="phoneRegions">Comma-separated ISO region codes used to interpret phone numbers
-    /// written without a country code. International numbers with a + prefix are recognized regardless.</param>
     public PatternDetector(string? phoneRegions = null)
     {
         var supported = PhoneUtil.GetSupportedRegions();
@@ -99,8 +85,6 @@ public sealed class PatternDetector
 
     public IReadOnlyList<string> PhoneRegions => _phoneRegions;
 
-    /// <summary>Require domestic numbers to be grouped the way their country writes them. This rejects
-    /// dates and reference numbers that happen to have a valid digit count; international + numbers are unaffected.</summary>
     public bool StrictPhoneGrouping { get; init; } = true;
 
     public IEnumerable<EntitySpan> Detect(string text, CancellationToken cancellationToken = default)
@@ -116,7 +100,6 @@ public sealed class PatternDetector
     }
 
     // Identical spans keep their best rule; a span nested inside a stronger finding of
-    // another type (a card inside a labelled account number) is not reported separately.
     internal static IEnumerable<EntitySpan> Resolve(IEnumerable<EntitySpan> spans, CancellationToken cancellationToken = default)
     {
         var collected = new List<EntitySpan>();
@@ -143,7 +126,6 @@ public sealed class PatternDetector
         {
             cancellationToken.ThrowIfCancellationRequested();
             // Start order does not imply end order: an expired short span can sit
-            // between this candidate and an earlier, still-containing long span.
             active.RemoveAll(s => s.Start + s.Length <= span.Start);
             bool covered = false;
             for (int i = active.Count - 1; i >= 0; i--)
@@ -177,7 +159,6 @@ public sealed class PatternDetector
                     candidate = text.Substring(start, length);
                 }
                 // Tika image metadata and config/log text often expose key=email@example.com.
-                // '=' is legal in an email local part: strip only familiar assignment labels.
                 if (rule.Type == "Email") {
                     var assignment = EmailAssignment.Match(candidate);
                     if (assignment.Success) { start += assignment.Length; length -= assignment.Length; candidate = candidate[assignment.Length..]; }
@@ -196,9 +177,6 @@ public sealed class PatternDetector
     private IEnumerable<EntitySpan> Phones(string text, CancellationToken cancellationToken)
     {
         // libphonenumber validates length, prefix and grouping rules per country, which rejects
-        // most identifiers that merely look like a phone number. Candidates are located here
-        // first so that paths, IP addresses, dates and money are never parsed and so each
-        // region pass only costs one parse per remaining candidate.
         var leniency = StrictPhoneGrouping ? PhoneNumberUtil.Leniency.STRICT_GROUPING : PhoneNumberUtil.Leniency.VALID;
         foreach (Match candidate in PhoneCandidate.Matches(text))
         {
@@ -208,7 +186,6 @@ public sealed class PatternDetector
             if (digits is < 7 or > 17 || DottedQuad.IsMatch(value) || IsoDate.IsMatch(value)) continue;
             if (candidate.Index > 0 && text[candidate.Index - 1] is '/' or '#' or '$' or '£' or '€' or '\\') continue;
             // Explicit ID labels are stronger evidence than an incidental phone prefix.
-            // Anchor to the candidate so "NHS helpline: ..." still permits a phone.
             if (NonPhoneLabel.IsMatch(text.AsSpan(Math.Max(0, candidate.Index - 60), Math.Min(60, candidate.Index)))) continue;
             foreach (string region in _phoneRegions)
             {
@@ -224,7 +201,6 @@ public sealed class PatternDetector
         }
     }
 
-    /// <summary>Per-rule timing for a text, for benchmarking and tuning. Not used by scanning.</summary>
     public IEnumerable<(string Rule, double Milliseconds, int Matches)> Profile(string text)
     {
         var view = DetectionText.Create(text, default);
@@ -260,7 +236,6 @@ public sealed class PatternDetector
     private static double SsnConfidence(string text, int start, string value, double valid, double invalid)
     {
         double confidence = SsnStructureValid(value) ? valid : invalid;
-        // "#123-45-6789" reads as a ticket or order reference.
         int i = start - 1; while (i >= 0 && text[i] == ' ') i--;
         if (i >= 0 && text[i] == '#') confidence *= .5;
         return confidence;
@@ -286,14 +261,12 @@ public sealed class PatternDetector
     {
         if (!Luhn(value)) return 0;
         // A valid-looking window inside a longer digit sequence is a different identifier.
-        // An expiry such as "12/26" after the number is not a continuation.
         if (DigitGroupBefore.IsMatch(text.AsSpan(Math.Max(0, start - 24), Math.Min(start, 24))) ||
             DigitGroupAfter.IsMatch(text.AsSpan(start + value.Length, Math.Min(24, text.Length - start - value.Length)))) return 0;
         Span<char> d = stackalloc char[19]; int n = 0;
         foreach (char c in value) if (char.IsAsciiDigit(c)) { if (n == 19) return 0; d[n++] = c; }
         int p2 = (d[0] - '0') * 10 + d[1] - '0', p3 = p2 * 10 + d[2] - '0', p4 = p3 * 10 + d[3] - '0';
         // Issuer ranges and lengths: Luhn alone accepts about one random digit string in ten,
-        // including IMEIs and many account numbers.
         if (d[0] == '4') return n is 13 or 16 or 19 ? .9 : 0;
         if (p2 is >= 51 and <= 55 || p4 is >= 2221 and <= 2720) return n == 16 ? .9 : 0;
         if (p2 is 34 or 37) return n == 15 ? .9 : 0;
@@ -339,7 +312,6 @@ public sealed class PatternDetector
 
     private static double Secret(string text, int start, string value)
     {
-        // A sentence ending the line ("password: required.") is prose, not a secret.
         value = value.TrimEnd('.', '!', '?', ')', ']', '}');
         if (value.Length < 8 || Placeholders.Contains(value) || value.All(c => c is '*' or 'x' or 'X' or '•' or '#')) return 0;
         if (value[0] is '$' or '%' or '{' or '<' or '@' or '[' or '(') return 0; // Variable references and markup.

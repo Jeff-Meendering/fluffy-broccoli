@@ -89,7 +89,7 @@ public static class ImageReader
         foreach (string arg in new[] { file, "stdout", "--tessdata-dir", Path.Combine(paths.OcrDirectory, "tessdata"), "-l", "eng", "--psm", "11", "-c", "tessedit_create_tsv=1" }) start.ArgumentList.Add(arg);
         start.Environment["OMP_THREAD_LIMIT"] = "1";
         foreach (string variable in new[] { "TEMP", "TMP", "TMPDIR" }) start.Environment[variable] = start.WorkingDirectory;
-        if (!OperatingSystem.IsWindows()) start.Environment["LD_LIBRARY_PATH"] = Path.Combine(paths.OcrDirectory, "lib");
+        if (OperatingSystem.IsLinux()) start.Environment["LD_LIBRARY_PATH"] = Path.Combine(paths.OcrDirectory, "lib");
         using var process = Process.Start(start) ?? throw new IOException("Could not start OCR");
         void Kill() { try { if (!process.HasExited) process.Kill(true); } catch (Exception e) when (e is InvalidOperationException or System.ComponentModel.Win32Exception) { } }
         using var registration = token.Register(Kill);

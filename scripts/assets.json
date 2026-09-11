@@ -1,0 +1,42 @@
+[
+  {
+    "url": "https://repo.maven.apache.org/maven2/org/apache/tika/tika-app/3.3.2/tika-app-3.3.2.jar",
+    "path": "worker/tika-app.jar",
+    "sha256": "71ca551380e5eab1add99101f4597a8a49a6a18c6143d6874ee9599ca10ae00e"
+  },
+  {
+    "url": "https://huggingface.co/onnx-community/distilbert-NER-ONNX/resolve/3a19fe9404a4469d91aa3d551558a97f68872f67/onnx/model_quantized.onnx",
+    "path": "models/model_quantized.onnx",
+    "sha256": "9419a876387ff2bbe5f21ab7429c7bef93eac86c50353390d4d8fca6e4a210d8"
+  },
+  {
+    "url": "https://huggingface.co/onnx-community/distilbert-NER-ONNX/resolve/3a19fe9404a4469d91aa3d551558a97f68872f67/vocab.txt",
+    "path": "models/vocab.txt",
+    "sha256": "eeaa9875b23b04b4c54ef759d03db9d1ba1554838f8fb26c5d96fa551df93d02"
+  },
+  {
+    "url": "https://huggingface.co/onnx-community/distilbert-NER-ONNX/resolve/3a19fe9404a4469d91aa3d551558a97f68872f67/config.json",
+    "path": "models/config.json",
+    "sha256": "f109facddb205dac712adf5877e4315fae62041bc0916fe808d92abdb594d1fe"
+  },
+  {
+    "url": "https://huggingface.co/onnx-community/distilbert-NER-ONNX/resolve/3a19fe9404a4469d91aa3d551558a97f68872f67/tokenizer_config.json",
+    "path": "models/tokenizer_config.json",
+    "sha256": "3c02f7e3bd40e2aca0235ca42256609fd0cd7d883226e17ddea667f1b1314665"
+  },
+  {
+    "url": "https://huggingface.co/onnx-community/distilbert-NER-ONNX/resolve/3a19fe9404a4469d91aa3d551558a97f68872f67/README.md",
+    "path": "models/README.md",
+    "sha256": "e0833c918d787ef6b82b62a2bb78640bdbc317156ec4bddef0e179791736cae4"
+  },
+  {
+    "url": "https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/4.1.0/eng.traineddata",
+    "path": "ocr/tessdata/eng.traineddata",
+    "sha256": "7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2"
+  },
+  {
+    "url": "https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/4.1.0/osd.traineddata",
+    "path": "ocr/tessdata/osd.traineddata",
+    "sha256": "9cf5d576fcc47564f11265841e5ca839001e7e6f38ff7f7aacf46d15a96b00ff"
+  }
+]

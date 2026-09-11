@@ -113,7 +113,7 @@ public class WindowTests
         window.FindControl<ComboBox>("TypeFilter")!.SelectedIndex = 0;
         grid.SelectedItem = findings[0];
         string screenshots = Path.Combine(TestPaths.Root, "test-results"); Directory.CreateDirectory(screenshots);
-        using var bitmap = window.CaptureRenderedFrame(); Assert.NotNull(bitmap); bitmap.Save(Path.Combine(screenshots, "desktop-window-" + (OperatingSystem.IsWindows() ? "windows" : "linux") + ".png"), Avalonia.Media.Imaging.PngBitmapEncoderOptions.Default);
+        using var bitmap = window.CaptureRenderedFrame(); Assert.NotNull(bitmap); bitmap.Save(Path.Combine(screenshots, "desktop-window-" + (OperatingSystem.IsWindows() ? "windows" : OperatingSystem.IsMacOS() ? "macos" : "linux") + ".png"), Avalonia.Media.Imaging.PngBitmapEncoderOptions.Default);
         Assert.True(window.FindControl<Button>("ScanButton")!.Bounds.Right <= window.FindControl<Button>("StopButton")!.Bounds.Left);
         window.FindControl<TabControl>("ResultsTabs")!.SelectedIndex = 1;
         Avalonia.Threading.Dispatcher.UIThread.RunJobs();

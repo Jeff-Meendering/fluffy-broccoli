@@ -89,7 +89,6 @@ public sealed class PilotReviewTests : IDisposable
     }
 
     // BIP-350 official v0-v16 examples, including a short future-version address.
-    // https://github.com/bitcoin/bips/blob/master/bip-0350.mediawiki
     [Theory]
     [InlineData("BC1QW508D6QEJXTDG4Y5R3ZARVARY0C5XW7KV8F3T4")]
     [InlineData("BC1SW50QGDZ25J")]

@@ -30,7 +30,8 @@ public static class ImageReader
                 if (read.Score > best.Score || best.Text.Length == 0) best = read;
                 if (best.Score >= 65 && best.Text.Length > 5) break;
             }
-            var parts = new List<ExtractedPart> { new(source, $"OCR · average word confidence {best.Score:F0}%", best.Text, "text/plain") };
+            var parts = new List<ExtractedPart> { new(source, $"OCR · average word confidence {best.Score:F0}%", best.Text, "text/plain")
+                { Origin = new("", "ocr:frame:0", EvidenceKind.Ocr, TextRepresentation.OcrText) } };
             if (best.Text.Length == 0 || best.Score < 65)
                 parts.Add(new(source, "", "", "", "OCR found little or uncertain text. Handwriting, rotation or low resolution may hide PII; review the image."));
             if (codec.FrameCount > 1) parts.Add(new(source, "", "", "", "Only the first animation frame was OCR checked"));

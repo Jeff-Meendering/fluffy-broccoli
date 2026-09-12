@@ -88,11 +88,11 @@ public static class PdfReport
             layout.Ensure(100);
             layout.Heading($"{++number:N0}. {finding.Type}", 12);
             layout.Paragraph("Source: " + privacy.Source(finding.FilePath, finding.Source), 9);
-            layout.Paragraph("Location: " + privacy.Clean(finding.Location), 9);
+            layout.Paragraph("Location: " + privacy.Clean(finding.DisplayLocation), 9);
             layout.Paragraph("Value: " + privacy.Clean(finding.Value), 11);
             layout.Paragraph("Detection: " + privacy.Clean(finding.Method) +
                 (finding.Method == "Local model" ? $" (model score {finding.Confidence:P0}; not a calibrated probability)" : " (pattern / context match)"), 8);
-            if (report.Options.IncludeContext) layout.Paragraph("Context: " + privacy.Clean(finding.Context), 9);
+            if (report.Options.IncludeContext) layout.Paragraph("Context: " + privacy.Clean(finding.DisplayContext), 9);
             layout.Rule();
             if (number % 250 == 0) progress?.Report(number);
         }

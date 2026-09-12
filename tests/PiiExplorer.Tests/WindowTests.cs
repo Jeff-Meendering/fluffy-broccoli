@@ -16,6 +16,18 @@ public static class TestAppBuilder
 }
 public class WindowTests
 {
+    [AvaloniaFact] public void SelectionShowsOccurrenceCoordinatesAndSynthesizedContext() {
+        var window = new MainWindow(); window.Show();
+        try {
+            var finding = new Finding("sample.csv", "", "CSV rows 1-2", "Date of birth", "DOB: 1991-07-24", "DOB: 1991-07-24", .99, "Pattern")
+            { Evidence = new(new("root", "table", EvidenceKind.Body, TextRepresentation.SynthesizedText), 40, 15, 40, 40, 15) };
+            window.ApplyUpdate(new(Findings: [finding]));
+            window.FindControl<DataGrid>("FindingsGrid")!.SelectedItem = finding;
+            Assert.Contains("UTF-16 offset 40", window.FindControl<TextBlock>("LocationText")!.Text);
+            Assert.Contains("Synthesized context", window.FindControl<TextBlock>("ContextText")!.Text);
+        } finally { window.Close(); }
+    }
+
     [AvaloniaFact] public void ConcurrentDiscoveryUpdatesCannotMoveProgressBackwards() {
         var window = new MainWindow();
         try {

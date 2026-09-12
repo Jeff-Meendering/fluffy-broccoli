@@ -10,6 +10,23 @@ public sealed class ReportTests : IDisposable
     public ReportTests() => Directory.CreateDirectory(Path.Combine(_temp, "source"));
     public void Dispose() => Directory.Delete(_temp, true);
 
+    [Fact] public async Task PdfPreservesOccurrenceLocationsAndMarksSynthesizedContext()
+    {
+        var snapshot = Snapshot(context: true);
+        var finding = snapshot.Findings[0] with
+        {
+            Evidence = new(new("root/archive:2", "table", EvidenceKind.Body, TextRepresentation.SynthesizedText), 120, 24, 110, 120, 24)
+        };
+        snapshot = snapshot with { Findings = [finding, finding with { Evidence = finding.Evidence with { Start = 220 } }] };
+        string path = Path.Combine(_temp, "occurrences.pdf");
+        PdfReport.Save(path, snapshot);
+        string text = await Extract(path);
+        Assert.Contains("root/archive:2 / table", text);
+        Assert.Contains("UTF-16 offset 120", text);
+        Assert.Contains("UTF-16 offset 220", text);
+        Assert.Contains("Synthesized context", text);
+    }
+
     private ReportSnapshot Snapshot(bool aliases = false, bool context = false)
     {
         string root = Path.Combine(_temp, "source");

@@ -235,11 +235,11 @@ public partial class MainWindow : Window
             return;
         }
         _selected = finding; _sourceFile = finding.FilePath;
-        SourceText.Text = ReportSource(finding.FilePath, finding.Source) + finding.DisplaySource; ContextText.Text = finding.Context;
+        SourceText.Text = ReportSource(finding.FilePath, finding.Source) + finding.DisplaySource; ContextText.Text = finding.DisplayContext;
         MethodText.Text = finding.Type + " · " + (finding.Method == "Local model" ? "Model score " + finding.Score + " (uncalibrated)" :
             (finding.Method.StartsWith("Pattern (", StringComparison.Ordinal) ? finding.Method[9..].TrimEnd(')') : "Pattern / context match") +
             " · confidence " + finding.Score + (finding.Method.Contains("Unicode normalized", StringComparison.Ordinal) ? " · Unicode normalized; original value shown" : ""));
-        LocationText.Text = finding.Location; RevealButton.IsEnabled = CopyButton.IsEnabled = true;
+        LocationText.Text = finding.DisplayLocation; RevealButton.IsEnabled = CopyButton.IsEnabled = true;
     }
     private void IssueSelected(object? sender, SelectionChangedEventArgs e)
     {

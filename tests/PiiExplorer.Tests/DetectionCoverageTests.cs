@@ -46,11 +46,12 @@ public sealed class DetectionCoverageTests
     }
 
     [Fact]
-    public void PhoneRegionsAreConfigurableAndInvalidCodesAreIgnored()
+    public void PhoneRegionsAreConfigurableAndInvalidCodesAreRejected()
     {
         const string text = "Call 030 1234567 from Berlin";
         Assert.DoesNotContain(new PatternDetector("US,GB").Detect(text), s => s.Type == "Phone");
-        var german = new PatternDetector("de, nope, US");
+        Assert.Throws<ArgumentException>(() => new PatternDetector("de, nope, US"));
+        var german = new PatternDetector("de, US");
         Assert.Equal(new[] { "DE", "US" }, german.PhoneRegions);
         Assert.Contains(german.Detect(text), s => s.Type == "Phone");
     }

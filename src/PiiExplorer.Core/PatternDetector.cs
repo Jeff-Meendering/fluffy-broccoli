@@ -5,7 +5,7 @@ using PhoneNumbers;
 
 namespace PiiExplorer.Core;
 
-public sealed class PatternDetector
+public sealed class PatternDetector : IRecognizer
 {
     private delegate double Validator(string text, int start, string value);
     private sealed record Rule(string Type, Regex Pattern, double Score, Validator? Validate = null,
@@ -78,10 +78,10 @@ public sealed class PatternDetector
 
     public PatternDetector(string? phoneRegions = null)
     {
-        var supported = PhoneUtil.GetSupportedRegions();
-        _phoneRegions = (phoneRegions ?? "US,GB").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Select(r => r.ToUpperInvariant()).Where(supported.Contains).Distinct().DefaultIfEmpty("US").ToArray();
+        _phoneRegions = ScanOptions.ValidatePhoneRegions(phoneRegions ?? "US,GB");
     }
+
+    public string Id => "patterns";
 
     public IReadOnlyList<string> PhoneRegions => _phoneRegions;
 

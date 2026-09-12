@@ -58,6 +58,13 @@ public sealed class ExtractionClient(RuntimePaths paths) : IDisposable
         [EnumeratorCancellation] CancellationToken cancellationToken, string? resourceName = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        var missing = paths.Missing(false, ocr).ToArray();
+        if (missing.Length > 0)
+        {
+            yield return new("", "", "", "", "Parser dependencies missing: " + string.Join(", ", missing.Select(Path.GetFileName)))
+            { Reason = CoverageReason.MissingDependency };
+            yield break;
+        }
         if (Interlocked.CompareExchange(ref _reading, 1, 0) != 0)
             throw new InvalidOperationException("An extraction request is already active on this client");
         bool done = false;

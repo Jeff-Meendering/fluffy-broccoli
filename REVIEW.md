@@ -2,6 +2,8 @@
 
 Reviewed 11 September 2026. This is a useful development checkpoint and a candidate for a controlled professional pilot. It is not yet supported by evidence sufficient to claim best-in-class detection, exhaustive discovery, or forensic-grade reliability.
 
+I02 follow-up: a separate [independent text benchmark](tools/accuracy/RESULTS.md) now measures 5,000 externally authored synthetic documents against PII Explorer, Presidio, and local Philter/Phinder identifier configurations. The original assessment below predates those runs. They do not replace extraction/OCR evaluation, independent human adjudication, or evaluation of the competitors' optional name models.
+
 ## Continue or use Presidio?
 
 Continue if the product you want is a portable, local folder-scanning and evidence-review application for analysts. If your only requirement is a general-purpose PII detection API, start by evaluating Presidio instead of maintaining a competing library from scratch. Keeping this application and reusing a stronger detector are compatible decisions.
@@ -26,6 +28,7 @@ Kept libphonenumber, the expanded identifier/credential/wallet rules, configurab
 
 Corrected these concrete defects:
 
+- One broad path-removal regex was applied to findings, context, metadata and errors alike. It replaced legitimate detected values that begin with `/`, including a reproduced email and a connection-string credential, and because a match ran to the end of the line it also removed the parser failure reason that followed a path. Reports now redact only unambiguous host paths from a detected value, keep each value verbatim inside its surrounding context, and stop a path match at the end of the path.
 - Fast gates skipped valid IPv6 addresses with few decimal digits, letter-heavy IBANs, POB addresses and supported medical/member/patient labels. IDNA-encoded email suffixes also work again.
 - Invalid year values could throw during national-ID validation, interrupting extraction of unrelated evidence. Zero-filled NHS/TFN placeholders are rejected.
 - Wallet validation now checks witness version, program length, padding and the appropriate Bech32/Bech32m checksum. Generic checksum validity alone was insufficient; short valid witness addresses were also missed. See [BIP-350](https://github.com/bitcoin/bips/blob/master/bip-0350.mediawiki).

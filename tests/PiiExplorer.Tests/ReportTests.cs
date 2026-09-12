@@ -10,6 +10,23 @@ public sealed class ReportTests : IDisposable
     public ReportTests() => Directory.CreateDirectory(Path.Combine(_temp, "source"));
     public void Dispose() => Directory.Delete(_temp, true);
 
+    [Fact] public async Task PdfPreservesOccurrenceLocationsAndMarksSynthesizedContext()
+    {
+        var snapshot = Snapshot(context: true);
+        var finding = snapshot.Findings[0] with
+        {
+            Evidence = new(new("root/archive:2", "table", EvidenceKind.Body, TextRepresentation.SynthesizedText), 120, 24, 110, 120, 24)
+        };
+        snapshot = snapshot with { Findings = [finding, finding with { Evidence = finding.Evidence with { Start = 220 } }] };
+        string path = Path.Combine(_temp, "occurrences.pdf");
+        PdfReport.Save(path, snapshot);
+        string text = await Extract(path);
+        Assert.Contains("root/archive:2 / table", text);
+        Assert.Contains("UTF-16 offset 120", text);
+        Assert.Contains("UTF-16 offset 220", text);
+        Assert.Contains("Synthesized context", text);
+    }
+
     private ReportSnapshot Snapshot(bool aliases = false, bool context = false)
     {
         string root = Path.Combine(_temp, "source");
@@ -69,6 +86,130 @@ public sealed class ReportTests : IDisposable
         foreach (string secret in new[] { "PrivateHost", "PrivateUser", "PrivateServer", "root-secret", "hidden.txt" })
             Assert.DoesNotContain(secret, text);
         Assert.Contains("report.check@example.com", text);
+    }
+
+    [Fact] public async Task SlashPrefixedValuesSurviveWhileHostPathsStayOmitted()
+    {
+        var snapshot = Snapshot(context: true);
+        const string value = "/O=Acme/CN=jane.doe@example.com";
+        snapshot = snapshot with { Findings = [snapshot.Findings[0] with {
+            Value = value, Context = "cert=" + value + @" from C:\Users\PrivateHost\e.csv"
+        }] };
+        string path = Path.Combine(_temp, "slash-values.pdf");
+        PdfReport.Save(path, snapshot);
+        string text = await Extract(path);
+        Assert.Contains("Value: " + value, text);
+        Assert.Contains("cert=" + value + " from [absolute path omitted]", text);
+        Assert.DoesNotContain("PrivateHost", text);
+    }
+
+    [Fact] public async Task PathsWithSpacesStayOmittedWithoutSwallowingTheirNeighbours()
+    {
+        var snapshot = Snapshot(context: true);
+        snapshot = snapshot with { Findings = [snapshot.Findings[0] with {
+            Context = @"copied to C:\Users\PrivateHost\My Documents\salary.xlsx for jane.doe@example.com"
+        }] };
+        string path = Path.Combine(_temp, "spaced-paths.pdf");
+        PdfReport.Save(path, snapshot);
+        string text = await Extract(path);
+        foreach (string secret in new[] { "PrivateHost", "My Documents", "salary.xlsx" })
+            Assert.DoesNotContain(secret, text);
+        Assert.Contains("for jane.doe@example.com", text);
+    }
+
+    [Fact] public async Task UrlAndConnectionStringCredentialsSurvive()
+    {
+        var snapshot = Snapshot();
+        snapshot = snapshot with { Findings = [snapshot.Findings[0] with { Value = "postgres://reader:s3cr3t@db.example.com:5432/app" },
+            snapshot.Findings[1] with { Value = "https://vault.example.com/token?secret=8fa3" }] };
+        string path = Path.Combine(_temp, "credentials.pdf");
+        PdfReport.Save(path, snapshot);
+        string text = await Extract(path);
+        Assert.Contains("postgres://reader:s3cr3t@db.example.com:5432/app", text);
+        Assert.Contains("https://vault.example.com/token?secret=8fa3", text);
+    }
+
+    [Fact] public async Task ValuesThatAreHostPathsStayRedacted()
+    {
+        var snapshot = Snapshot() with { Issues = [] };
+        snapshot = snapshot with { Findings = [snapshot.Findings[0] with { Value = @"\\PrivateServer\Share\token.txt" },
+            snapshot.Findings[1] with { Value = @"D:\backups\credential.key" }] };
+        string path = Path.Combine(_temp, "path-values.pdf");
+        PdfReport.Save(path, snapshot);
+        string text = await Extract(path);
+        foreach (string secret in new[] { "PrivateServer", "token.txt", "credential.key" })
+            Assert.DoesNotContain(secret, text);
+        Assert.Equal(2, text.Split("[absolute path omitted]").Length - 1);
+    }
+
+    [Fact] public async Task ParserFailureReasonsSurvivePathRedaction()
+    {
+        var snapshot = Snapshot();
+        snapshot = snapshot with { Issues = [
+            new(snapshot.Issues[0].FilePath, "", "IOException: /tmp/tika-4711/private-input.tmp (No such file or directory)"),
+            new(snapshot.Issues[0].FilePath, "inside.txt", "Extraction incomplete: WriteLimitReachedException: output exceeded /srv/PrivateUser/limit.txt")] };
+        string path = Path.Combine(_temp, "reasons.pdf");
+        PdfReport.Save(path, snapshot);
+        string text = await Extract(path);
+        Assert.Contains("IOException: [absolute path omitted] (No such file or directory)", text);
+        Assert.Contains("Extraction incomplete", text);
+        Assert.Contains("WriteLimitReachedException", text);
+        foreach (string secret in new[] { "private-input.tmp", "PrivateUser", "limit.txt" })
+            Assert.DoesNotContain(secret, text);
+    }
+
+    [Fact] public async Task AliasModeKeepsSlashValuesAndStillHidesNames()
+    {
+        var snapshot = Snapshot(aliases: true, context: true);
+        const string value = "/CN=jane.doe@example.com";
+        snapshot = snapshot with { Findings = [snapshot.Findings[0] with { Value = value, Context = "owner " + value }] };
+        string path = Path.Combine(_temp, "alias-values.pdf");
+        PdfReport.Save(path, snapshot);
+        string text = await Extract(path);
+        Assert.Contains("Value: " + value, text);
+        Assert.Contains("owner " + value, text);
+        foreach (string secret in new[] { "contacts.txt", "backup.rar", "locked.zip", "ReportHostUser" })
+            Assert.DoesNotContain(secret, text);
+    }
+
+    [Fact] public async Task BidiControlsInPreservedValuesAreEscapedNotHidden()
+    {
+        var snapshot = Snapshot();
+        // A bidi override is a formatting control: the report shows it instead of letting it
+        // silently reorder the value it reproduces.
+        string value = "/CN=جين\u202E/email=jane.doe@example.com";
+        snapshot = snapshot with { Findings = [snapshot.Findings[0] with { Value = value }] };
+        string path = Path.Combine(_temp, "bidi.pdf");
+        PdfReport.Save(path, snapshot);
+        string text = await Extract(path);
+        Assert.Contains("[U+202E]", text);
+        Assert.Contains("/email=jane.doe@example.com", text);
+        Assert.DoesNotContain("جين", text);
+        Assert.DoesNotContain('\u202E', text);
+    }
+
+    [Fact] public async Task LongSlashPrefixedValueRoundTripsAcrossWrappedLines()
+    {
+        var snapshot = Snapshot();
+        string value = "/BEGIN-SLASH-VALUE/" + new string('k', 320) + "/END-SLASH-VALUE";
+        snapshot = snapshot with { Findings = [snapshot.Findings[0] with { Value = value }] };
+        string path = Path.Combine(_temp, "long-slash.pdf");
+        PdfReport.Save(path, snapshot);
+        string text = await Extract(path);
+        Assert.Contains("/BEGIN-SLASH-VALUE/", text);
+        Assert.Contains(new string('k', 60), text);
+        Assert.Contains("/END-SLASH-VALUE", text);
+    }
+
+    [Fact] public async Task ReportKeepsReproducibilitySettingsAndAttentionReasons()
+    {
+        var snapshot = Snapshot();
+        string path = Path.Combine(_temp, "settings.pdf");
+        PdfReport.Save(path, snapshot);
+        string text = await Extract(path);
+        foreach (string setting in new[] { "Image reading: on", "People’s names: on", "File limit: 100 MiB", "Timeout: 180 seconds" })
+            Assert.Contains(setting, text);
+        Assert.Contains("Cannot open [absolute path omitted]", text);
     }
 
     [Fact] public void DestinationCreatedDuringRenderingIsNeverReplaced()

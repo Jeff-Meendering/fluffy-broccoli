@@ -88,11 +88,11 @@ public static class PdfReport
             layout.Ensure(100);
             layout.Heading($"{++number:N0}. {finding.Type}", 12);
             layout.Paragraph("Source: " + privacy.Source(finding.FilePath, finding.Source), 9);
-            layout.Paragraph("Location: " + privacy.Clean(finding.Location), 9);
-            layout.Paragraph("Value: " + privacy.Clean(finding.Value), 11);
+            layout.Paragraph("Location: " + privacy.Clean(finding.DisplayLocation), 9);
+            layout.Paragraph("Value: " + privacy.Value(finding.Value), 11);
             layout.Paragraph("Detection: " + privacy.Clean(finding.Method) +
                 (finding.Method == "Local model" ? $" (model score {finding.Confidence:P0}; not a calibrated probability)" : " (pattern / context match)"), 8);
-            if (report.Options.IncludeContext) layout.Paragraph("Context: " + privacy.Clean(finding.Context), 9);
+            if (report.Options.IncludeContext) layout.Paragraph("Context: " + privacy.Clean(finding.DisplayContext, finding.Value), 9);
             layout.Rule();
             if (number % 250 == 0) progress?.Report(number);
         }
@@ -118,12 +118,27 @@ public static class PdfReport
 
     private sealed class ReportText
     {
+        private const string Omitted = "[absolute path omitted]";
+        // Unambiguous host paths: file URIs, drive letters and UNC shares. A drive letter must not
+        // be the last letter of a scheme ("https://"), so URLs stay intact.
+        private const string HostPathStart = @"(?:file:/+|(?<![\w])[a-z]:[\\/]|\\\\|(?<![\w:])//)";
+        // A path ends after a separator and the space-free run that follows it, continuing over
+        // spaces only while the next part also ends in a separator ("C:\a\My Documents\b.xlsx").
+        // Bounding the token keeps the failure reason or the neighbour beside it on the same line.
+        private const string HostPathBody =
+            @"(?:[^<>|\r\n""]*?[\\/])?[^\s<>|""]*(?:[ \t]+[^\s<>|""\\/]*[\\/][^\s<>|""]*)*";
+        // Detected values are the evidence a report exists to communicate: only an unambiguous
+        // host path is removed from them, never a slash-initial value, URL or connection string.
+        private static readonly Regex ValuePath = new(@"(?i)" + HostPathStart + HostPathBody,
+            RegexOptions.Compiled | RegexOptions.CultureInvariant, TimeSpan.FromSeconds(2));
+        // Host-derived free text (locations, context, parser errors and member names) also hides a
+        // bare slash-initial token, because an absolute path can start with "/" alone.
+        private static readonly Regex TextPath = new(@"(?i)" + HostPathStart + HostPathBody +
+            @"|(?<![\w:/])/(?=[^\s/])" + HostPathBody, RegexOptions.Compiled | RegexOptions.CultureInvariant, TimeSpan.FromSeconds(2));
         private readonly ReportSnapshot _report;
         private readonly Dictionary<string, string> _files;
         private readonly Dictionary<(string, string), string> _parts = [];
         private readonly string[] _privatePrefixes;
-        private static readonly Regex AbsolutePath = new(@"(?i)(?:file:/+|[a-z]:[\\/]|\\\\)[^\r\n<>\""|]*|(?<![\w:/])/(?=[^\s/])[^\r\n<>\""|]*|(?<!:)//[^\r\n<>\""|]*",
-            RegexOptions.Compiled | RegexOptions.CultureInvariant, TimeSpan.FromSeconds(2));
 
         public ReportText(ReportSnapshot report)
         {
@@ -146,11 +161,50 @@ public static class PdfReport
             return name;
         }
 
-        public string Clean(string text)
+        /// <summary>Keeps a detected value intact apart from host paths, which are never evidence.</summary>
+        public string Value(string value) => Private(ValuePath.Replace(value, Omitted));
+
+        /// <summary>Redacts host paths in extracted metadata, parser errors and optional context as
+        /// visible content too, while leaving any detected value inside them verbatim.</summary>
+        public string Clean(string text, string? preserve = null)
         {
-            // Redact host paths in extracted metadata, parser errors and optional context as visible content too.
-            text = AbsolutePath.Replace(text, "[absolute path omitted]");
-            foreach (string prefix in _privatePrefixes) text = text.Replace(prefix, "[source root]", StringComparison.OrdinalIgnoreCase);
+            var spans = Preserved(text, preserve);
+            if (spans.Count == 0) return Private(TextPath.Replace(text, Omitted));
+            // Clean around each value instead of inside it, so a path next to the value is still
+            // redacted and the value is never swallowed by the path that follows it.
+            var result = new StringBuilder();
+            int at = 0;
+            foreach (var (start, length) in spans) {
+                result.Append(Private(TextPath.Replace(text[at..start], Omitted))).Append(text, start, length);
+                at = start + length;
+            }
+            return result.Append(Private(TextPath.Replace(text[at..], Omitted))).ToString();
+        }
+
+        private List<(int Start, int Length)> Preserved(string text, string? preserve)
+        {
+            var spans = new List<(int Start, int Length)>();
+            // A value that survives its own redaction is not a host path, so a neighbouring path
+            // must not absorb it where it appears in the surrounding text.
+            if (string.IsNullOrEmpty(preserve) || Value(preserve) != preserve) return spans;
+            for (int i = text.IndexOf(preserve, StringComparison.Ordinal); i >= 0;
+                 i = text.IndexOf(preserve, i + preserve.Length, StringComparison.Ordinal))
+                spans.Add((i, preserve.Length));
+            return spans;
+        }
+
+        private string Private(string text)
+        {
+            foreach (string prefix in _privatePrefixes) {
+                var result = new StringBuilder();
+                int at = 0;
+                for (int i = text.IndexOf(prefix, StringComparison.OrdinalIgnoreCase); i >= 0;
+                     i = text.IndexOf(prefix, at, StringComparison.OrdinalIgnoreCase)) {
+                    result.Append(text, at, i - at).Append("[source root]");
+                    at = i + prefix.Length;
+                }
+                text = result.Append(text, at, text.Length - at).ToString();
+            }
             return text;
         }
     }

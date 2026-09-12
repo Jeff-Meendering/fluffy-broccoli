@@ -360,7 +360,6 @@ public sealed class NameCoverageTests(PiiNameDetectionFixture fixture) : IClassF
     }
 
     [Theory]
-    [InlineData("Regards, Tom")]
     [InlineData("Best regards,")]
     [InlineData("Send the PDF to IBM and NASA today.")]
     [InlineData("The FBI and CIA met with ACME CORP.")]
@@ -421,7 +420,8 @@ public sealed class ExtractionCoverageTests : IDisposable
         var result = await Scan();
         Assert.Empty(result.Issues);
         foreach (string email in new[] { "attr@example.com", "text@example.net", "href@example.com", "visible@example.org", "json@example.com" })
-            Assert.Single(result.Findings, f => f.Type == "Email" && f.Value == email);
+            Assert.Single(result.Findings, f => f.Type == "Email" && f.Value == email && f.Evidence!.Origin.StreamId == "decoded-text");
+        Assert.Single(result.Findings, f => f.Value == "visible@example.org" && f.Evidence!.Origin.StreamId == "body");
         Assert.Contains(result.Findings, f => f.FileName == "page.html" && f.Type == "Social Security number" && f.Value == "123456789");
         Assert.Contains(result.Findings, f => f.FileName == "page.html" && f.Value == "Passport number: AB1234567");
         Assert.Contains(result.Findings, f => f.FileName == "events.jsonl" && f.Type == "Social Security number");

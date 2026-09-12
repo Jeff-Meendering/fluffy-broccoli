@@ -50,6 +50,7 @@ public final class ExtractionWorker {
         private List<String> headers = new ArrayList<>();
         private StringBuilder cell;
         private int rowChars;
+        private boolean synthesized;
         TableTextHandler(ContentHandler target, TextBudget budget) { this.target = target; this.budget = budget; }
         @Override public void startElement(String uri, String local, String q, Attributes attributes) throws SAXException {
             if (local.equals("table")) headers = new ArrayList<>();
@@ -71,6 +72,7 @@ public final class ExtractionWorker {
                 cells.add(cell.toString().trim()); cell = null;
             }
             if (local.equals("tr") && !cells.isEmpty()) {
+                synthesized = true;
                 List<String> labels = cells.stream().map(ExtractionWorker::columnLabel).toList();
                 boolean isHeader = labels.stream().anyMatch(v -> !v.isEmpty());
                 if (isHeader) headers = labels;
@@ -99,21 +101,32 @@ public final class ExtractionWorker {
     private static final class StreamingHandler extends RecursiveParserWrapperHandler {
         private final boolean ocr;
         private final String resourceName;
-        private int total;
+        private int total, embeddedOrdinal;
         StreamingHandler(boolean ocr, String resourceName) {
             super(new TextFactory(), MAX_EMBEDDED);
             this.ocr = ocr;
             this.resourceName = resourceName;
         }
         @Override public void endEmbeddedDocument(ContentHandler h, Metadata m) throws SAXException {
+            m.set("X-TIKA:piiResourceId", "embedded:" + ++embeddedOrdinal);
+            markRepresentation(h, m);
             super.endEmbeddedDocument(h, m); drain();
         }
         @Override public void endDocument(ContentHandler h, Metadata m) throws SAXException {
+            m.set("X-TIKA:piiResourceId", "");
+            markRepresentation(h, m);
             super.endDocument(h, m); drain();
+        }
+        private void markRepresentation(ContentHandler h, Metadata m) {
+            // Unknown wrappers are conservatively marked: never promise original text
+            // when a handler may have inserted table labels or separators.
+            m.set("X-TIKA:piiRepresentation", h instanceof TableTextHandler t && !t.synthesized
+                ? "ExtractedText" : "SynthesizedText");
         }
         private void drain() throws SAXException {
             for (Metadata m : metadataList) {
                 String source = Optional.ofNullable(m.get(TikaCoreProperties.EMBEDDED_RESOURCE_PATH)).orElse("");
+                String resourceId = Optional.ofNullable(m.get("X-TIKA:piiResourceId")).orElse("");
                 String type = Optional.ofNullable(m.get("Content-Type")).orElse("unknown");
                 String text = Optional.ofNullable(m.get(TikaCoreProperties.TIKA_CONTENT)).orElse("");
                 if (source.isEmpty() && resourceName.toLowerCase(Locale.ROOT).endsWith(".one") && !type.contains("onenote"))
@@ -131,22 +144,26 @@ public final class ExtractionWorker {
                 if (!ocr && (type.startsWith("image/") || type.equals("application/pdf"))) issue(source, "Image content was not OCR checked (OCR is off)");
                 if (text.isBlank() && (type.startsWith("image/") || type.equals("application/pdf") || type.contains("onenote")))
                     issue(source, "No readable text extracted from " + type + "; review this file manually");
-                emit(source, "document text", text, type);
-                for (String key : m.names()) {
+                emit(source, "document text", text, type, resourceId, "body", "Body",
+                    Optional.ofNullable(m.get("X-TIKA:piiRepresentation")).orElse("SynthesizedText"));
+                String[] keys = m.names(); Arrays.sort(keys);
+                for (String key : keys) {
                     if (key.startsWith("X-TIKA") || key.equals("Content-Type") || key.equals("Content-Length")) continue;
-                    String value = String.join("; ", m.getValues(key));
-                    // JPEG metadata extraction can describe Tika's staged file instead
-                    // of the document. Its random decimal suffix can even pass Luhn.
-                    // Keep source-authored metadata and the real resourceName; omit only
-                    // this known generated filesystem value, not all image metadata.
-                    if (type.startsWith("image/") && key.equals("File Name") &&
-                        value.matches("apache-tika-[0-9]+\\.[A-Za-z0-9]{1,10}")) continue;
-                    if (!value.isBlank()) emit(source, "metadata: " + key, value, type);
+                    String[] values = m.getValues(key);
+                    for (int i = 0; i < values.length; i++) {
+                        String value = values[i];
+                        // Exclude the parser's generated temporary filename.
+                        if (type.startsWith("image/") && key.equals("File Name") &&
+                            value.matches("apache-tika-[0-9]+\\.[A-Za-z0-9]{1,10}")) continue;
+                        if (!value.isBlank()) emit(source, "metadata: " + key, value, type, resourceId,
+                            "metadata:" + key.length() + ":" + key + ":" + i, "Metadata", "ExtractedText");
+                    }
                 }
             }
             metadataList.clear();
         }
-        private void emit(String source, String location, String text, String type) throws SAXException {
+        private void emit(String source, String location, String text, String type, String resourceId,
+                          String streamId, String kind, String representation) throws SAXException {
             if (text.length() > MAX_TOTAL_CHARS - total) throw new SAXException("Total extracted text limit reached; remaining content not checked");
             total += text.length();
             for (int start = 0; start < text.length();) {
@@ -157,7 +174,9 @@ public final class ExtractionWorker {
                     else { int boundary = end; while (boundary > start + 12000 && !Character.isWhitespace(text.charAt(boundary - 1))) boundary--; end = boundary; }
                 }
                 send(Map.of("kind", "segment", "source", source, "location", location + " · character " + start,
-                            "text", text.substring(start, end), "contentType", type));
+                            "text", text.substring(start, end), "contentType", type,
+                            "origin", Map.of("resourceId", resourceId, "streamId", streamId, "kind", kind,
+                                "representation", representation, "start", start)));
                 if (end == text.length()) break;
                 int next = Math.max(start + 1, end - 256);
                 int line = text.lastIndexOf('\n', next);

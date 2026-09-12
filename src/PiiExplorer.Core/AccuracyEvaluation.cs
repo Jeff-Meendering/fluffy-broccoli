@@ -9,6 +9,8 @@ public sealed record ExpectedEntity(string Type, int Start, int Length);
 public sealed record EvaluationCase(string Text, ExpectedEntity[] Entities);
 public sealed record AccuracyCounts(long TruePositive, long FalsePositive, long FalseNegative)
 {
+    public long GoldEntities => TruePositive + FalseNegative;
+    public double? FalseNegativeProportion => GoldEntities == 0 ? null : (double)FalseNegative / GoldEntities;
     public double? Precision => TruePositive + FalsePositive == 0 ? null : (double)TruePositive / (TruePositive + FalsePositive);
     public double? Recall => TruePositive + FalseNegative == 0 ? null : (double)TruePositive / (TruePositive + FalseNegative);
     public double? F1 => 2 * TruePositive + FalsePositive + FalseNegative == 0 ? null :
@@ -17,6 +19,9 @@ public sealed record AccuracyCounts(long TruePositive, long FalsePositive, long 
 public sealed record AccuracyReport(int SchemaVersion, string CorpusSha256, string? ModelSha256, bool NamesEnabled,
     int Cases, long Characters, double Seconds, AccuracyCounts Micro, IReadOnlyDictionary<string, AccuracyCounts> ByType)
 {
+    public int CleanDocuments { get; init; }
+    public long FalsePositivesOnCleanDocuments { get; init; }
+    public double? FalsePositivesPerCleanDocument => CleanDocuments == 0 ? null : (double)FalsePositivesOnCleanDocuments / CleanDocuments;
     public string EngineVersion => typeof(AccuracyEvaluation).Assembly.GetName().Version?.ToString() ?? "unknown";
     public string Matching => "Exact type and UTF-16 start/length; duplicate spans counted once. Text detector evaluation only; excludes file extraction and OCR.";
     public string Interpretation => "Scores describe this labelled corpus only. Negative controls and representative independent labels are required. Model scores are not calibrated probabilities.";
@@ -38,7 +43,7 @@ public static class AccuracyEvaluation
         string? modelHash = null;
         if (namesEnabled) { using var model = File.OpenRead(paths.Model); modelHash = Hash(model, token); }
         var patterns = new PatternDetector(); var totals = new SortedDictionary<string, AccuracyCounts>(StringComparer.Ordinal);
-        int cases = 0, lineNumber = 0; long characters = 0;
+        int cases = 0, lineNumber = 0, cleanDocuments = 0; long characters = 0, cleanFalsePositives = 0;
         var watch = Stopwatch.StartNew();
         while (ReadLine(reader, token) is string line)
         {
@@ -58,6 +63,7 @@ public static class AccuracyEvaluation
             var predicted = patterns.Detect(item.Text, token).Where(s => namesEnabled || s.Type != "Person")
                 .Select(s => new ExpectedEntity(s.Type, s.Start, s.Length)).ToHashSet();
             if (names is not null) predicted.UnionWith(names.Detect(item.Text, token).Select(s => new ExpectedEntity(s.Type, s.Start, s.Length)));
+            if (expected.Count == 0) { cleanDocuments++; cleanFalsePositives += predicted.Count; }
             foreach (string type in expected.Select(e => e.Type).Concat(predicted.Select(e => e.Type)).Distinct())
             {
                 long tp = predicted.Count(e => e.Type == type && expected.Contains(e));
@@ -68,8 +74,9 @@ public static class AccuracyEvaluation
             cases++; characters += item.Text.Length;
         }
         if (cases == 0) throw new InvalidDataException("Evaluation corpus contains no cases.");
-        return new(1, fingerprint, modelHash, namesEnabled, cases, characters, watch.Elapsed.TotalSeconds,
-            new(totals.Values.Sum(c => c.TruePositive), totals.Values.Sum(c => c.FalsePositive), totals.Values.Sum(c => c.FalseNegative)), totals);
+        return new(2, fingerprint, modelHash, namesEnabled, cases, characters, watch.Elapsed.TotalSeconds,
+            new(totals.Values.Sum(c => c.TruePositive), totals.Values.Sum(c => c.FalsePositive), totals.Values.Sum(c => c.FalseNegative)), totals)
+            { CleanDocuments = cleanDocuments, FalsePositivesOnCleanDocuments = cleanFalsePositives };
     }
 
     public static void Save(string path, AccuracyReport report, CancellationToken token = default)

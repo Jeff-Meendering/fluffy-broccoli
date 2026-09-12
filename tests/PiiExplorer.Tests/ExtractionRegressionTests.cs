@@ -348,16 +348,19 @@ public sealed class ExtractionRegressionTests : IDisposable
         File.Copy(Fixture("corpus", "08_broken", "corrupt.docx"), Path.Combine(_temp, "corrupt.docx"));
         string healthy = Fixture("corpus", "03_pdf", "invoice.pdf");
         using var client = new ExtractionClient(TestPaths.Assets);
-        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+        // Each phase starts its own worker, so they get separate deadlines: a slow first
+        // request must not consume the budget the healthy document needs to prove reuse works.
+        using var firstDeadline = new CancellationTokenSource(TimeSpan.FromSeconds(60));
         try {
-            await foreach (var part in client.ReadAsync(Path.Combine(_temp, "corrupt.docx"), false, deadline.Token)) { }
+            await foreach (var part in client.ReadAsync(Path.Combine(_temp, "corrupt.docx"), false, firstDeadline.Token)) { }
         }
         catch (Exception e) when (e is IOException or InvalidOperationException or TimeoutException) {
             _output.WriteLine("Corrupt document failed as expected: " + e.Message);
         }
         client.Stop();
         var texts = new List<string>();
-        await foreach (var part in client.ReadAsync(healthy, false, deadline.Token)) texts.Add(part.Text);
+        using var secondDeadline = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+        await foreach (var part in client.ReadAsync(healthy, false, secondDeadline.Token)) texts.Add(part.Text);
         Assert.Contains(texts, text => text.Contains("priya.r@example.net"));
     }
 

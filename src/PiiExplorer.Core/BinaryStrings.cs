@@ -99,7 +99,8 @@ internal static class BinaryStrings
 
         private void Emit(int length)
         {
-            pending.Enqueue(new(source, $"binary strings · byte {_start} ({encoding})", _text.ToString(0, length), "application/octet-stream"));
+            pending.Enqueue(new(source, $"binary strings · byte {_start} ({encoding})", _text.ToString(0, length), "application/octet-stream")
+            { Origin = new("", "binary:" + encoding, EvidenceKind.BinaryStrings, TextRepresentation.BinaryText, _start, OffsetUnit.Byte, stride) });
             _fresh = Math.Min(_fresh, _text.Length - length);
         }
     }

@@ -16,7 +16,7 @@ foreach ($folder in @('models','worker')) {
     Copy-Item -LiteralPath "$projectDir/assets/$folder" -Destination "$outputDir/assets" -Recurse -Force
 }
 if (Test-Path "$projectDir/licenses") { Copy-Item "$projectDir/licenses/*" "$outputDir/licenses" -Recurse -Force }
-foreach ($name in @('README.md', 'REVIEW.md', 'PILOT-GUIDE.md', 'CONTRIBUTING.md', 'THIRD-PARTY-NOTICES.md')) {
+foreach ($name in @('README.md', 'REVIEW.md', 'PILOT-GUIDE.md', 'CONTRIBUTING.md', 'THIRD-PARTY-NOTICES.md', 'LICENSE', 'NOTICE', 'SECURITY.md')) {
     if (Test-Path "$projectDir/$name") { Copy-Item -LiteralPath "$projectDir/$name" -Destination $outputDir -Force }
 }
 if ($Runtime -eq 'win-x64') {

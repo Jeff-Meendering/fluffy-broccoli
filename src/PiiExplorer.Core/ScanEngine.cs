@@ -20,7 +20,7 @@ public sealed class ScanEngine(RuntimePaths paths)
         ".css", ".scss", ".less", ".vcf", ".ics", ".reg", ".inf", ".diff", ".patch", ".tex", ".rst", ".adoc", ".config", ".xaml", ".plist", ".csproj",
         ".props", ".targets", ".gradle", ".tf", ".hcl", ".srt", ".vtt" };
     // HTML is parsed for table semantics and readable text, then also read raw so that
-    // mailto: links, data attributes and hidden fields are checked. Duplicates collapse.
+    // mailto: links, data attributes and hidden fields are checked. Each representation has its own offsets.
     private static readonly HashSet<string> MarkupExtensions = new(StringComparer.OrdinalIgnoreCase) { ".html", ".htm", ".xhtml" };
     private static readonly HashSet<string> Archives = new(StringComparer.OrdinalIgnoreCase) {
         ".zip", ".rar", ".7z", ".tar", ".gz", ".tgz", ".bz2", ".xz", ".jar" };
@@ -120,7 +120,7 @@ public sealed class ScanEngine(RuntimePaths paths)
                     progress.Report(new(file, Volatile.Read(ref discovered), Volatile.Read(ref completed)));
                     // A file and all its nested members are owned by one worker. Release its
                     // deduplication state immediately instead of retaining it for the whole scan.
-                    var seen = new HashSet<(string Source, string Evidence, string Type, string Value)>();
+                    var seen = new HashSet<(string Resource, string Stream, string Type, long Start, long Length)>();
                     using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellation);
                     deadline.CancelAfter(TimeSpan.FromSeconds(options.FileTimeoutSeconds));
                     var ct = deadline.Token;
@@ -130,7 +130,7 @@ public sealed class ScanEngine(RuntimePaths paths)
                     {
                         initialFile = new FileInfo(file);
                         initialLength = initialFile.Length; initialWrite = initialFile.LastWriteTimeUtc;
-                        Detect(new("", "file / folder name", Path.GetRelativePath(root, file).Replace('_', ' '), "text/plain"));
+                        Detect(new("", "file / folder name", Path.GetRelativePath(root, file).Replace('_', ' '), "text/plain") { Origin = new("root", "name", EvidenceKind.FileName, TextRepresentation.SynthesizedText) });
                         if (initialLength > options.MaxFileBytes) { Issue(file, "", $"File exceeds {options.MaxFileBytes / 1024 / 1024} MiB limit"); continue; }
                         await foreach (var part in ExtractAsync(file, "", options, extractor, new(), 0, ct))
                         {
@@ -150,15 +150,17 @@ public sealed class ScanEngine(RuntimePaths paths)
                             void Publish(IEnumerable<EntitySpan> spans)
                             {
                                 var batch = new List<Finding>();
-                                string evidence = part.Location.Contains("name") || part.Location.StartsWith("metadata:") ? part.Location : "content";
+                                var origin = part.Origin ?? throw new InvalidDataException("Extraction part has no evidence origin");
                                 try
                                 {
                                     foreach (var span in spans)
                                     {
                                         if (ct.IsCancellationRequested) break; // Publish already reserved findings before stopping.
                                         string value = part.Text.Substring(span.Start, span.Length).Trim();
-                                        // Collapse overlapping chunks, but keep filename, body and metadata evidence distinct.
-                                        if (string.IsNullOrWhiteSpace(value) || !seen.Add((part.Source, evidence, span.Type, value))) continue;
+                                        // Only the same span in the same representation is a duplicate.
+                                        long start = origin.Start + (long)span.Start * origin.Stride;
+                                        long length = (long)span.Length * origin.Stride;
+                                        if (string.IsNullOrWhiteSpace(value) || !seen.Add((origin.ResourceId, origin.StreamId, span.Type, start, length))) continue;
                                         int reserved;
                                         do { reserved = Volatile.Read(ref count); }
                                         while (reserved < options.MaxFindings && Interlocked.CompareExchange(ref count, reserved + 1, reserved) != reserved);
@@ -169,12 +171,11 @@ public sealed class ScanEngine(RuntimePaths paths)
                                             limitCancellation.Cancel(); break;
                                         }
                                         int lo = Math.Max(0, span.Start - 80), hi = Math.Min(part.Text.Length, span.Start + span.Length + 100);
-                                        string context = string.Create(hi - lo, (part.Text, lo), static (buffer, state) =>
+                                        string context = part.Text[lo..hi];
+                                        batch.Add(new(file, part.Source, part.Location, span.Type, value, context, span.Confidence, span.Method)
                                         {
-                                            state.Text.AsSpan(state.lo, buffer.Length).CopyTo(buffer);
-                                            buffer.Replace('\r', ' '); buffer.Replace('\n', ' ');
+                                            Evidence = new(origin, start, length, origin.Start + (long)lo * origin.Stride, span.Start, span.Length)
                                         });
-                                        batch.Add(new(file, part.Source, part.Location, span.Type, value, context, span.Confidence, span.Method));
                                         if (batch.Count == 256) { progress.Report(new(Findings: batch)); batch = []; }
                                     }
                                 }
@@ -215,11 +216,11 @@ public sealed class ScanEngine(RuntimePaths paths)
     }
 
     private async IAsyncEnumerable<ExtractedPart> ExtractAsync(string file, string source, ScanOptions options,
-        ExtractionClient extractor, ArchiveBudget budget, int depth, [EnumeratorCancellation] CancellationToken token, string? resourceName = null)
+        ExtractionClient extractor, ArchiveBudget budget, int depth, [EnumeratorCancellation] CancellationToken token, string? resourceName = null, string resourceId = "root")
     {
         // Catch at the member boundary so a corrupt nested document cannot hide its siblings.
         await using var parts = ExtractCoreAsync(file, source, options, extractor, budget, depth, token,
-            resourceName ?? Path.GetFileName(file)).GetAsyncEnumerator(token);
+            resourceName ?? Path.GetFileName(file), resourceId).GetAsyncEnumerator(token);
         while (true)
         {
             ExtractedPart? failed = null; bool moved = false;
@@ -231,12 +232,15 @@ public sealed class ScanEngine(RuntimePaths paths)
             }
             if (failed is not null) { yield return failed; yield break; }
             if (!moved) break;
-            yield return parts.Current;
+            var current = parts.Current;
+            if (current.Issue is null && current.Origin is null)
+                throw new InvalidDataException("Extraction part has no evidence origin");
+            yield return current;
         }
     }
 
     private async IAsyncEnumerable<ExtractedPart> ExtractCoreAsync(string file, string source, ScanOptions options,
-        ExtractionClient extractor, ArchiveBudget budget, int depth, [EnumeratorCancellation] CancellationToken token, string resourceName)
+        ExtractionClient extractor, ArchiveBudget budget, int depth, [EnumeratorCancellation] CancellationToken token, string resourceName, string resourceId)
     {
         token.ThrowIfCancellationRequested();
         string ext = await ArchiveExtensionAsync(file, token) ?? Path.GetExtension(resourceName);
@@ -251,6 +255,7 @@ public sealed class ScanEngine(RuntimePaths paths)
                 await using var input = File.OpenRead(file);
                 await using var archive = new[] { ".7z", ".zip", ".jar", ".rar" }.Contains(ext.ToLowerInvariant())
                     ? await ArchiveFactory.OpenAsyncArchive(input, cancellationToken: token) : null;
+                int memberOrdinal = 0;
                 if (archive is not null && !await archive.IsSolidAsync())
                 {
                     // Independent ZIP/non-solid RAR entries can recover from corrupt or encrypted
@@ -261,6 +266,7 @@ public sealed class ScanEngine(RuntimePaths paths)
                         if (budget.Exhausted) yield break;
                         string key = string.IsNullOrEmpty(entry.Key) ? "member" : entry.Key;
                         string memberSource = JoinSource(source, key);
+                        string memberId = resourceId + "/archive:" + ++memberOrdinal;
                         if (++budget.Members > 2000)
                         {
                             budget.Exhausted = true;
@@ -268,7 +274,8 @@ public sealed class ScanEngine(RuntimePaths paths)
                             yield break;
                         }
                         if (entry.IsDirectory) continue;
-                        yield return new(memberSource, "archive member name", key.Replace('_', ' '), "text/plain");
+                        yield return new(memberSource, "archive member name", key.Replace('_', ' '), "text/plain")
+                        { Origin = new(memberId, "name", EvidenceKind.ArchiveMemberName, TextRepresentation.SynthesizedText) };
                         if (entry.IsEncrypted || !string.IsNullOrEmpty(entry.LinkTarget))
                         {
                             yield return new(memberSource, "", "", "", entry.IsEncrypted ? "Password-protected archive member" : "Archive link not followed");
@@ -287,7 +294,7 @@ public sealed class ScanEngine(RuntimePaths paths)
                         if (error is not null) { yield return new(memberSource, "", "", "", error); continue; }
                         try
                         {
-                            await foreach (var part in ExtractAsync(target!, memberSource, options, extractor, budget, depth + 1, token, key)) yield return part;
+                            await foreach (var part in ExtractAsync(target!, memberSource, options, extractor, budget, depth + 1, token, key, memberId)) yield return part;
                         }
                         finally { File.Delete(target!); }
                     }
@@ -303,6 +310,7 @@ public sealed class ScanEngine(RuntimePaths paths)
                     string key = string.IsNullOrEmpty(reader.Entry.Key) ? Path.GetFileNameWithoutExtension(resourceName) : reader.Entry.Key;
                     if (string.IsNullOrEmpty(key)) key = "member";
                     string memberSource = JoinSource(source, key);
+                    string memberId = resourceId + "/archive:" + ++memberOrdinal;
                     if (++budget.Members > 2000)
                     {
                         budget.Exhausted = true;
@@ -311,7 +319,8 @@ public sealed class ScanEngine(RuntimePaths paths)
                         yield break;
                     }
                     if (reader.Entry.IsDirectory) continue;
-                    yield return new(memberSource, "archive member name", key.Replace('_', ' '), "text/plain");
+                    yield return new(memberSource, "archive member name", key.Replace('_', ' '), "text/plain")
+                        { Origin = new(memberId, "name", EvidenceKind.ArchiveMemberName, TextRepresentation.SynthesizedText) };
                     // Forward/solid readers cannot safely skip an encrypted or oversized stream.
                     if (reader.Entry.IsEncrypted || !string.IsNullOrEmpty(reader.Entry.LinkTarget))
                     {
@@ -335,7 +344,7 @@ public sealed class ScanEngine(RuntimePaths paths)
                     if (error is not null) { yield return new(memberSource, "", "", "", error); yield break; }
                     try
                     {
-                        await foreach (var part in ExtractAsync(target!, memberSource, options, extractor, budget, depth + 1, token, key)) yield return part;
+                        await foreach (var part in ExtractAsync(target!, memberSource, options, extractor, budget, depth + 1, token, key, memberId)) yield return part;
                     }
                     finally { File.Delete(target!); }
                 }
@@ -350,11 +359,11 @@ public sealed class ScanEngine(RuntimePaths paths)
             {
                 imageParts = [new(source, "", "", "", "Image OCR incomplete: " + e.Message)];
             }
-            foreach (var part in imageParts) yield return part;
+            foreach (var part in imageParts) yield return WithSource(part with { Source = "" });
             await foreach (var part in extractor.ReadAsync(file, false, token, resourceName))
                 if ((part.Issue is null && part.Location.StartsWith("metadata:")) || (part.Issue is not null &&
                     !part.Issue.StartsWith("Image content was not OCR") && !part.Issue.StartsWith("No readable text extracted")))
-                    yield return part with { Source = JoinSource(source, part.Source) };
+                    yield return WithSource(part);
         }
         else if ((ext.Equals(".csv", StringComparison.OrdinalIgnoreCase) || ext.Equals(".tsv", StringComparison.OrdinalIgnoreCase)) && await IsUnicodeTextAsync(file, token))
         {
@@ -365,7 +374,7 @@ public sealed class ScanEngine(RuntimePaths paths)
             string[] headers = csv.ReadFields() ?? [];
             string[] labels = headers.Select(TableContext.Label).ToArray();
             bool hasName = labels.Contains("Full name: ");
-            var buffer = new StringBuilder(string.Join(" | ", headers) + "\n"); int row = 1, startRow = 1;
+            var buffer = new StringBuilder(string.Join(" | ", headers) + "\n"); int row = 1, startRow = 1; long tableOffset = 0;
             while (!csv.EndOfData)
             {
                 token.ThrowIfCancellationRequested();
@@ -377,7 +386,7 @@ public sealed class ScanEngine(RuntimePaths paths)
                 }
                 if (error is not null)
                 {
-                    if (buffer.Length > 0) yield return new(source, $"{tableName} rows {startRow}–{row}", buffer.ToString(), tableType);
+                    if (buffer.Length > 0) yield return TablePart();
                     yield return new(source, "", "", "", error);
                     yield break;
                 }
@@ -389,15 +398,17 @@ public sealed class ScanEngine(RuntimePaths paths)
                     buffer.Append(fields[i].Replace('\n', ' ').Replace('\r', ' ')).Append(" | ");
                 }
                 buffer.AppendLine();
-                if (buffer.Length >= 24000) { yield return new(source, $"{tableName} rows {startRow}–{row}", buffer.ToString(), tableType); buffer.Clear(); startRow = row + 1; }
+                if (buffer.Length >= 24000) { yield return TablePart(); tableOffset += buffer.Length; buffer.Clear(); startRow = row + 1; }
             }
-            if (buffer.Length > 0) yield return new(source, $"{tableName} rows {startRow}–{row}", buffer.ToString(), tableType);
+            if (buffer.Length > 0) yield return TablePart();
+            ExtractedPart TablePart() => new(source, $"{tableName} rows {startRow}-{row}", buffer.ToString(), tableType)
+            { Origin = new(resourceId, "table", EvidenceKind.Body, TextRepresentation.SynthesizedText, tableOffset) };
         }
         else if ((TextExtensions.Contains(ext) || MarkupExtensions.Contains(ext)) && await IsUnicodeTextAsync(file, token))
         {
             if (MarkupExtensions.Contains(ext))
                 await foreach (var part in extractor.ReadAsync(file, options.Ocr, token, resourceName))
-                    yield return part with { Source = JoinSource(source, part.Source) };
+                    yield return WithSource(part);
             using var reader = new StreamReader(file, new UTF8Encoding(false, true), detectEncodingFromByteOrderMarks: true);
             var buffer = ArrayPool<char>.Shared.Rent(24000);
             try
@@ -416,7 +427,8 @@ public sealed class ScanEngine(RuntimePaths paths)
                         if (end == 0) end = 24000;
                     }
                     string text = overlap + pending[..end];
-                    yield return new(source, "text · character " + Math.Max(0, offset - overlap.Length), text, "text/plain");
+                    yield return new(source, "text · character " + Math.Max(0, offset - overlap.Length), text, "text/plain")
+                    { Origin = new(resourceId, "decoded-text", EvidenceKind.Body, TextRepresentation.DecodedText, Math.Max(0, offset - overlap.Length)) };
                     int start = Math.Max(0, text.Length - 256);
                     while (start > Math.Max(0, text.Length - 512) && !char.IsWhiteSpace(text[start - 1])) start--;
                     overlap = text[start..]; offset += end; pending = pending[end..];
@@ -432,16 +444,22 @@ public sealed class ScanEngine(RuntimePaths paths)
             {
                 if (part.Issue is not null && part.Source.Length == 0 && part.Issue.StartsWith("Unsupported content:", StringComparison.Ordinal))
                 { unsupported = true; continue; }
-                yield return part with { Source = JoinSource(source, part.Source) };
+                yield return WithSource(part);
             }
             // No parser understands this format: fall back to printable strings so captures,
             // dumps, databases and unknown binaries still surface embedded identifiers.
             if (unsupported)
             {
                 yield return new(source, "", "", "", "Unrecognized format; only readable ASCII/UTF-16 strings were checked, so structured, compressed or encrypted content may hide PII");
-                await foreach (var part in BinaryStrings.ReadAsync(file, source, 16_000_000, token)) yield return part;
+                await foreach (var part in BinaryStrings.ReadAsync(file, "", 16_000_000, token)) yield return WithSource(part);
             }
         }
+        ExtractedPart WithSource(ExtractedPart part) => part with
+        {
+            Source = JoinSource(source, part.Source),
+            Origin = part.Origin is { } origin ? origin with
+            { ResourceId = resourceId + (origin.ResourceId.Length == 0 ? "" : "/" + origin.ResourceId) } : null
+        };
     }
 
     // Technical metadata (colour profiles, resource types, encodings) never names a person,

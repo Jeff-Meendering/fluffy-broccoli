@@ -90,7 +90,7 @@ public sealed class ExtractionClient(RuntimePaths paths) : IDisposable
                 string source = root.TryGetProperty("source", out var s) ? s.GetString() ?? "" : "";
                 if (kind == "issue") yield return new(source, "", "", "", root.GetProperty("message").GetString());
                 else if (kind == "segment") yield return new(source, root.GetProperty("location").GetString() ?? "", root.GetProperty("text").GetString() ?? "",
-                    root.GetProperty("contentType").GetString() ?? "");
+                    root.GetProperty("contentType").GetString() ?? "") { Origin = ReadOrigin(root) };
                 else throw new IOException("Unknown extraction worker record: " + kind);
             }
         }
@@ -101,6 +101,17 @@ public sealed class ExtractionClient(RuntimePaths paths) : IDisposable
             if (!done) Dispose();
             Volatile.Write(ref _reading, 0);
         }
+    }
+
+    private static EvidenceOrigin ReadOrigin(JsonElement record)
+    {
+        if (!record.TryGetProperty("origin", out var origin))
+            throw new IOException("Extraction worker has no evidence provenance; rebuild the worker");
+        long start = origin.GetProperty("start").GetInt64();
+        if (start < 0) throw new IOException("Invalid extraction offset");
+        return new(origin.GetProperty("resourceId").GetString()!, origin.GetProperty("streamId").GetString()!,
+            Enum.Parse<EvidenceKind>(origin.GetProperty("kind").GetString()!),
+            Enum.Parse<TextRepresentation>(origin.GetProperty("representation").GetString()!), start);
     }
 
     private async Task<string?> ReadRecordAsync(StreamReader reader, CancellationToken token)

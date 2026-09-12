@@ -2,7 +2,9 @@
 
 Scan folders for personally identifiable information. Open a folder, select findings to see source context, search, filter, or generate PDF reports.
 
-## Installation
+Professional pilot 0.3.0. Not exhaustive detection. See [PILOT-GUIDE.md](PILOT-GUIDE.md).
+
+## Install
 
 **macOS:**
 ```bash
@@ -26,63 +28,29 @@ Use `dist/osx-x64` on Intel.
 ./scripts/prepare-linux.sh "/path/to/PII Explorer"
 ```
 
-## Development
+## Develop
+
 ```bash
 dotnet run --project src/PiiExplorer.App -- --assets "$PWD/assets"
 ```
 
-## Features
+Needs the [.NET 10.0 SDK](global.json); macOS also needs Homebrew OpenJDK 21 and Tesseract. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
-- **Local processing**: All scans happen on your machine. No data leaves your system.
-- **Multiple formats**: Text, Markdown, CSV, TSV, Office documents, PDF, OneNote, email, images, archives.
-- **Pattern detection**: SSNs, credit cards, addresses, emails, phone numbers, crypto wallets.
-- **Name recognition**: Uses ML models for English names.
-- **Report generation**: Export findings to PDF with file ID privacy.
+## Detects
 
-## Note
+Person, email, phone, SSN, payment card, street address, date of birth, IP and MAC address, UK National Insurance, IBAN, national IDs, credentials, crypto wallets.
 
-Professional pilot 0.3.0. Not exhaustive detection. See [PILOT-GUIDE.md](PILOT-GUIDE.md) for details.
+Reads text, markdown, CSV/TSV, DOCX/XLSX/PPTX, PDF, OneNote, email, web pages, JPEG/PNG/HEIC and ZIP/RAR/7-Zip archives.
 
-## Technical Details
+## Limits
 
-### Supported Formats
+- Local processing only; OCR and extraction use temporary directories
+- 100 MiB per file (adjustable), 3 minutes per file
+- 500,000 findings and 10,000 attention items
+- Paths relative to the scanned folder, empty PDF metadata
 
-- Text: text, markdown, CSV, TSV
-- Office: DOCX, XLSX, PPTX
-- Images: JPEG, PNG, HEIC
-- Archives: ZIP, RAR, 7-Zip
-- Others: PDF, OneNote, email, web pages
+## License
 
-### PII Types Detected
+[Apache License 2.0](LICENSE) — see [NOTICE](NOTICE). Report vulnerabilities privately as described in [SECURITY.md](SECURITY.md).
 
-Person, email, phone, Social Security number, payment card, street address, date of birth, IP address, MAC address, UK National Insurance, IBAN, national IDs, credentials, crypto wallets
-
-### Limits
-
-- File size: 100 MiB (adjustable)
-- Timeout: 3 minutes per file
-- Maximum findings: 500,000
-- Maximum attention items: 10,000
-
-### Privacy
-
-- File paths relative to scanned folder (can use file IDs)
-- Empty PDF metadata
-- Local processing only
-- OCR/Extraction in temporary directories
-
-### Dependencies
-
-- [.NET 10.0 SDK](global.json)
-- Homebrew OpenJDK 21 (macOS)
-- Tesseract OCR
-- Apache Tika (for document parsing)
-- ONNX Runtime (for name recognition)
-- libphonenumber (for phone validation)
-
-## Links
-
-- [PILOT-GUIDE.md](PILOT-GUIDE.md) - Installation and usage guide
-- [REVIEW.md](REVIEW.md) - Performance and accuracy evaluation
-- [CONTRIBUTING.md](CONTRIBUTING.md) - Development instructions
-- [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) - Third-party licenses
+[PILOT-GUIDE](PILOT-GUIDE.md) · [REVIEW](REVIEW.md) · [CONTRIBUTING](CONTRIBUTING.md) · [THIRD-PARTY-NOTICES](THIRD-PARTY-NOTICES.md)

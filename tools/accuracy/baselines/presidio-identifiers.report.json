@@ -1,0 +1,313 @@
+{
+  "documents": 5000,
+  "micro": {
+    "true_positive": 4070,
+    "false_positive": 1270,
+    "false_negative": 1169,
+    "gold_entities": 5239,
+    "precision": 0.7621722846441947,
+    "recall": 0.7768658140866578,
+    "f1": 0.7694489082143869,
+    "false_negative_proportion": 0.22313418591334225,
+    "clean_documents": 1735,
+    "false_positives_on_clean_documents": 296,
+    "false_positives_per_clean_document": 0.17060518731988472,
+    "intervals_95": {
+      "precision": {
+        "lower": 0.7502362472010058,
+        "upper": 0.7734393838734283,
+        "defined_resamples": 2000
+      },
+      "recall": {
+        "lower": 0.7651339280877939,
+        "upper": 0.7878586591435257,
+        "defined_resamples": 2000
+      },
+      "f1": {
+        "lower": 0.7601287172111099,
+        "upper": 0.7782347174324952,
+        "defined_resamples": 2000
+      },
+      "false_negative_proportion": {
+        "lower": 0.21214134085647426,
+        "upper": 0.23486607191220601,
+        "defined_resamples": 2000
+      },
+      "false_positives_per_clean_document": {
+        "lower": 0.14886363636363636,
+        "upper": 0.19208118569573468,
+        "defined_resamples": 2000
+      }
+    }
+  },
+  "by_type": {
+    "Email": {
+      "true_positive": 1045,
+      "false_positive": 23,
+      "false_negative": 4,
+      "gold_entities": 1049,
+      "precision": 0.9784644194756554,
+      "recall": 0.996186844613918,
+      "f1": 0.9872461029759093,
+      "false_negative_proportion": 0.0038131553860819827,
+      "clean_documents": 4106,
+      "false_positives_on_clean_documents": 8,
+      "false_positives_per_clean_document": 0.001948368241597662,
+      "intervals_95": {
+        "precision": {
+          "lower": 0.9668375780724137,
+          "upper": 0.9884756660410845,
+          "defined_resamples": 2000
+        },
+        "recall": {
+          "lower": 0.9920239282153539,
+          "upper": 0.9990732373940204,
+          "defined_resamples": 2000
+        },
+        "f1": {
+          "lower": 0.9805566161988877,
+          "upper": 0.9930654616143366,
+          "defined_resamples": 2000
+        },
+        "false_negative_proportion": {
+          "lower": 0.0009267626059794734,
+          "upper": 0.007976071784646061,
+          "defined_resamples": 2000
+        },
+        "false_positives_per_clean_document": {
+          "lower": 0.0004855400289496123,
+          "upper": 0.0038807164995486106,
+          "defined_resamples": 2000
+        }
+      }
+    },
+    "IP address": {
+      "true_positive": 956,
+      "false_positive": 33,
+      "false_negative": 6,
+      "gold_entities": 962,
+      "precision": 0.9666329625884732,
+      "recall": 0.9937629937629938,
+      "f1": 0.9800102511532548,
+      "false_negative_proportion": 0.006237006237006237,
+      "clean_documents": 4244,
+      "false_positives_on_clean_documents": 5,
+      "false_positives_per_clean_document": 0.00117813383600377,
+      "intervals_95": {
+        "precision": {
+          "lower": 0.9478077195111788,
+          "upper": 0.9817813765182186,
+          "defined_resamples": 2000
+        },
+        "recall": {
+          "lower": 0.9867482161060143,
+          "upper": 0.9989743589743589,
+          "defined_resamples": 2000
+        },
+        "f1": {
+          "lower": 0.9698429246092086,
+          "upper": 0.9884682198090342,
+          "defined_resamples": 2000
+        },
+        "false_negative_proportion": {
+          "lower": 0.0010256410256410256,
+          "upper": 0.013251783893985729,
+          "defined_resamples": 2000
+        },
+        "false_positives_per_clean_document": {
+          "lower": 0.0,
+          "upper": 0.0030488520554219625,
+          "defined_resamples": 2000
+        }
+      }
+    },
+    "Payment card": {
+      "true_positive": 361,
+      "false_positive": 11,
+      "false_negative": 302,
+      "gold_entities": 663,
+      "precision": 0.9704301075268817,
+      "recall": 0.5444947209653092,
+      "f1": 0.6975845410628019,
+      "false_negative_proportion": 0.4555052790346908,
+      "clean_documents": 4429,
+      "false_positives_on_clean_documents": 10,
+      "false_positives_per_clean_document": 0.002257846014901784,
+      "intervals_95": {
+        "precision": {
+          "lower": 0.9507772020725389,
+          "upper": 0.986488302818948,
+          "defined_resamples": 2000
+        },
+        "recall": {
+          "lower": 0.5044613742236025,
+          "upper": 0.5808978828481297,
+          "defined_resamples": 2000
+        },
+        "f1": {
+          "lower": 0.6626662259895792,
+          "upper": 0.7274529795711375,
+          "defined_resamples": 2000
+        },
+        "false_negative_proportion": {
+          "lower": 0.4191021171518703,
+          "upper": 0.4955386257763975,
+          "defined_resamples": 2000
+        },
+        "false_positives_per_clean_document": {
+          "lower": 0.0009072146424842127,
+          "upper": 0.0038427197605593595,
+          "defined_resamples": 2000
+        }
+      }
+    },
+    "Phone": {
+      "true_positive": 703,
+      "false_positive": 887,
+      "false_negative": 201,
+      "gold_entities": 904,
+      "precision": 0.4421383647798742,
+      "recall": 0.7776548672566371,
+      "f1": 0.5637530072173216,
+      "false_negative_proportion": 0.22234513274336284,
+      "clean_documents": 4255,
+      "false_positives_on_clean_documents": 813,
+      "false_positives_per_clean_document": 0.191069330199765,
+      "intervals_95": {
+        "precision": {
+          "lower": 0.4154180293229676,
+          "upper": 0.4668353404247958,
+          "defined_resamples": 2000
+        },
+        "recall": {
+          "lower": 0.7490840190295881,
+          "upper": 0.8046967850309119,
+          "defined_resamples": 2000
+        },
+        "f1": {
+          "lower": 0.537912901547404,
+          "upper": 0.5872052973964994,
+          "defined_resamples": 2000
+        },
+        "false_negative_proportion": {
+          "lower": 0.19530321496908806,
+          "upper": 0.2509159809704118,
+          "defined_resamples": 2000
+        },
+        "false_positives_per_clean_document": {
+          "lower": 0.17727681938139309,
+          "upper": 0.2044437825791925,
+          "defined_resamples": 2000
+        }
+      }
+    },
+    "Social Security number": {
+      "true_positive": 1005,
+      "false_positive": 316,
+      "false_negative": 656,
+      "gold_entities": 1661,
+      "precision": 0.7607872823618471,
+      "recall": 0.605057194461168,
+      "f1": 0.6740442655935613,
+      "false_negative_proportion": 0.39494280553883204,
+      "clean_documents": 3569,
+      "false_positives_on_clean_documents": 116,
+      "false_positives_per_clean_document": 0.032502101428971704,
+      "intervals_95": {
+        "precision": {
+          "lower": 0.737878595879139,
+          "upper": 0.782800528232217,
+          "defined_resamples": 2000
+        },
+        "recall": {
+          "lower": 0.5822683026130727,
+          "upper": 0.628109932835159,
+          "defined_resamples": 2000
+        },
+        "f1": {
+          "lower": 0.6554666096785662,
+          "upper": 0.6926747020164792,
+          "defined_resamples": 2000
+        },
+        "false_negative_proportion": {
+          "lower": 0.3718900671648409,
+          "upper": 0.41773169738692717,
+          "defined_resamples": 2000
+        },
+        "false_positives_per_clean_document": {
+          "lower": 0.026078286520263276,
+          "upper": 0.03915153309646005,
+          "defined_resamples": 2000
+        }
+      }
+    }
+  },
+  "macro": {
+    "precision": 0.8236906273465463,
+    "precision_defined_types": 5,
+    "recall": 0.7834313242120052,
+    "recall_defined_types": 5,
+    "f1": 0.7805276336005698,
+    "f1_defined_types": 5,
+    "false_negative_proportion": 0.21656867578799477,
+    "false_negative_proportion_defined_types": 5
+  },
+  "excluded_prediction_types": {
+    "Person": 3814
+  },
+  "excluded_gold_types": {
+    "Person": 2260
+  },
+  "uncertainty": {
+    "method": "percentile document bootstrap",
+    "samples": 2000,
+    "seed": 20260911,
+    "level": 0.95,
+    "limitations": "Conditional on corpus and projected labels. Related templates can violate independence; zero-error samples give degenerate intervals. Undefined denominators omitted, never scored as perfect."
+  },
+  "schema": 1,
+  "engine": "presidio",
+  "configuration": {
+    "engine": "presidio",
+    "version": "2.2.362",
+    "scope": [
+      "Email",
+      "IP address",
+      "Payment card",
+      "Phone",
+      "Social Security number"
+    ],
+    "prediction_configuration": {
+      "engine": "Presidio",
+      "version": "2.2.362",
+      "spacy": "3.8.11",
+      "model": "en_core_web_lg",
+      "model_version": "3.8.0",
+      "language": "en",
+      "score_threshold": 0.0,
+      "mapping": {
+        "EMAIL_ADDRESS": "Email",
+        "IP_ADDRESS": "IP address",
+        "CREDIT_CARD": "Payment card",
+        "PERSON": "Person",
+        "PHONE_NUMBER": "Phone",
+        "US_SSN": "Social Security number"
+      },
+      "networking": "Python socket operations disabled",
+      "suffix_list": "bundled tldextract snapshot; no cache or download"
+    },
+    "source_report_sha256": "f2b780e0665226dec8148ff221b966af21ef6efd5afeea125f60ed55e2e01a0a",
+    "note": "Same local full-detector predictions, rescored on the shared identifier scope; Person gold/predictions excluded."
+  },
+  "scope": [
+    "Email",
+    "IP address",
+    "Payment card",
+    "Phone",
+    "Social Security number"
+  ],
+  "corpus_sha256": "5cd497ea879e3ddfbc97fa209e09e962a10f3ca28c0204f3533e28076602d992",
+  "input_sha256": "8fc18bcb3d4835229a6ab35c38ddecc2773bf4c11002e199bb233511592a64e9",
+  "prediction_sha256": "84b15a5cf7cb6534c3a16adb126dd3deea86ae7e8b5737c0fdaca0f7d881dc7c",
+  "matching": "Exact type and UTF-16 span, duplicate predictions counted once. Text only; excludes extraction/OCR."
+}

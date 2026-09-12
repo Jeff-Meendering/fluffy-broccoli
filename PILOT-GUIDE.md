@@ -4,6 +4,16 @@ Extract the entire Windows ZIP into a new folder and open **PiiExplorer.exe**. K
 
 Choose a controlled test folder, scan it, and review **Needs attention** as carefully as the findings. A completed file count includes files that could only be partially checked. Stopped scans and limits leave incomplete coverage. Names and OCR focus on English; numeric identifiers and addresses have limited country coverage.
 
+## Finding locations
+
+Repeated values at different offsets appear as separate findings. Overlapping extraction chunks collapse only when the resource, text stream, entity type, offset and length match. Filename, metadata, parsed body and raw markup evidence remain separate; counts can therefore include multiple representations of the same source content.
+
+Selected findings and PDF reports identify the resource, text stream, representation, zero-based offset and length. Archive resource IDs use entry positions (including directory entries), so members with identical names remain distinguishable. IDs are local to the outer file and stable for unchanged inputs and extraction settings; changing container entries can change their IDs.
+
+A PDF report reproduces a detected value exactly, including values that begin with `/`, URLs and connection strings; only unambiguous host paths (file URIs, drive letters, UNC shares and the scan root, profile or temp folders) are replaced inside a value. Paths are also omitted from locations, context and attention-item reasons, and a path match stops at the end of the path so the reason or neighbouring text beside it is kept.
+
+Text offsets count UTF-16 code units in the identified representation; an emoji can occupy two units. Binary-string offsets and lengths count original bytes. Parsed documents and OCR use extracted-text coordinates, not PDF page positions, image boxes or file byte offsets. Table labels, separators and filename substitutions are explicitly marked as synthesized context. They do not establish an original-source range for redaction. Context retains the extraction text's line breaks. Detailed cell mappings are not yet available.
+
 ## Verify the download
 
 Compare the ZIP's SHA-256 with the `.zip.sha256` file received through a trusted channel. From the extracted folder, run the following with PowerShell:

@@ -88,7 +88,9 @@ public sealed class ExtractionClient(RuntimePaths paths) : IDisposable
                 string kind = root.GetProperty("kind").GetString()!;
                 if (kind == "done") { cancellationToken.ThrowIfCancellationRequested(); done = true; break; }
                 string source = root.TryGetProperty("source", out var s) ? s.GetString() ?? "" : "";
-                if (kind == "issue") yield return new(source, "", "", "", root.GetProperty("message").GetString());
+                if (kind == "issue") yield return new(source, "", "", "", root.GetProperty("message").GetString())
+                { Reason = Enum.Parse<CoverageReason>(root.GetProperty("reason").GetString()!),
+                  Origin = new(root.GetProperty("resourceId").GetString()!, "coverage", EvidenceKind.Body, TextRepresentation.ExtractedText) };
                 else if (kind == "segment") yield return new(source, root.GetProperty("location").GetString() ?? "", root.GetProperty("text").GetString() ?? "",
                     root.GetProperty("contentType").GetString() ?? "") { Origin = ReadOrigin(root) };
                 else throw new IOException("Unknown extraction worker record: " + kind);

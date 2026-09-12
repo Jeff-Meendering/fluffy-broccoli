@@ -33,14 +33,17 @@ public final class ExtractionWorker {
         try { OUT.println(JSON.writeValueAsString(value)); }
         catch (Exception e) { throw new SAXException(e); }
     }
-    private static void issue(String source, String message) throws SAXException {
-        send(Map.of("kind", "issue", "source", source, "message", message.substring(0, Math.min(2000, message.length()))));
+    private static void issue(String source, String resourceId, String reason, String message) throws SAXException {
+        send(Map.of("kind", "issue", "source", source, "resourceId", resourceId, "reason", reason, "message", message.substring(0, Math.min(2000, message.length()))));
+    }
+    private static final class CoverageLimitException extends SAXException {
+        CoverageLimitException(String message) { super(message); }
     }
     private static final class TextBudget {
         private long chars;
         void add(int length) throws SAXException {
             chars += length;
-            if (chars > MAX_TOTAL_CHARS) throw new SAXException("Total parsed text limit reached; remaining content unchecked");
+            if (chars > MAX_TOTAL_CHARS) throw new CoverageLimitException("Total parsed text limit reached; remaining content unchecked");
         }
     }
     private static final class TableTextHandler extends org.xml.sax.helpers.DefaultHandler {
@@ -60,7 +63,7 @@ public final class ExtractionWorker {
         }
         @Override public void characters(char[] ch, int start, int length) throws SAXException {
             budget.add(length);
-            if (cell != null) { if (cell.length() + length > MAX_CHARS) throw new SAXException("Table cell text limit reached"); cell.append(ch, start, length); }
+            if (cell != null) { if (cell.length() + length > MAX_CHARS) throw new CoverageLimitException("Table cell text limit reached"); cell.append(ch, start, length); }
             else target.characters(ch, start, length);
         }
         @Override public void ignorableWhitespace(char[] ch, int start, int length) throws SAXException { characters(ch, start, length); }
@@ -68,7 +71,7 @@ public final class ExtractionWorker {
         @Override public void endElement(String uri, String local, String q) throws SAXException {
             if ((local.equals("td") || local.equals("th")) && cell != null) {
                 rowChars += cell.length();
-                if (rowChars > MAX_CHARS || cells.size() >= 10_000) throw new SAXException("Table row limit reached; remaining content unchecked");
+                if (rowChars > MAX_CHARS || cells.size() >= 10_000) throw new CoverageLimitException("Table row limit reached; remaining content unchecked");
                 cells.add(cell.toString().trim()); cell = null;
             }
             if (local.equals("tr") && !cells.isEmpty()) {
@@ -130,20 +133,20 @@ public final class ExtractionWorker {
                 String type = Optional.ofNullable(m.get("Content-Type")).orElse("unknown");
                 String text = Optional.ofNullable(m.get(TikaCoreProperties.TIKA_CONTENT)).orElse("");
                 if (source.isEmpty() && resourceName.toLowerCase(Locale.ROOT).endsWith(".one") && !type.contains("onenote"))
-                    issue(source, "OneNote section was not recognized as OneNote content; review this .one file manually");
+                    issue(source, resourceId, "ExtractionFailure", "OneNote section was not recognized as OneNote content; review this .one file manually");
                 for (String key : m.names()) {
                     String lower = key.toLowerCase(Locale.ROOT);
                     if (lower.contains("exception") || lower.contains("limitreached") || lower.contains("truncated")) {
                         String message = String.join("; ", m.getValues(key)).split("\\R", 2)[0];
-                        issue(source, "Extraction incomplete: " + message.substring(0, Math.min(350, message.length())));
+                        issue(source, resourceId, lower.contains("limitreached") || lower.contains("truncated") ? "TextLimit" : "ExtractionFailure", "Extraction incomplete: " + message.substring(0, Math.min(350, message.length())));
                     }
                 }
                 String parsers = String.join(",", m.getValues(TikaCoreProperties.TIKA_PARSED_BY));
-                if (parsers.contains("EmptyParser")) issue(source, "Unsupported content: " + type + " (metadata only)");
-                if (type.startsWith("audio/") || type.startsWith("video/")) issue(source, "Only metadata was checked; speech and video frames were not transcribed");
-                if (!ocr && (type.startsWith("image/") || type.equals("application/pdf"))) issue(source, "Image content was not OCR checked (OCR is off)");
+                if (parsers.contains("EmptyParser")) issue(source, resourceId, "Unsupported", "Unsupported content: " + type + " (metadata only)");
+                if (type.startsWith("audio/") || type.startsWith("video/")) issue(source, resourceId, "UnsupportedRepresentation", "Only metadata was checked; speech and video frames were not transcribed");
+                if (!ocr && (type.startsWith("image/") || type.equals("application/pdf"))) issue(source, resourceId, "OcrDisabled", "Image content was not OCR checked (OCR is off)");
                 if (text.isBlank() && (type.startsWith("image/") || type.equals("application/pdf") || type.contains("onenote")))
-                    issue(source, "No readable text extracted from " + type + "; review this file manually");
+                    issue(source, resourceId, "NoReadableText", "No readable text extracted from " + type + "; review this file manually");
                 emit(source, "document text", text, type, resourceId, "body", "Body",
                     Optional.ofNullable(m.get("X-TIKA:piiRepresentation")).orElse("SynthesizedText"));
                 String[] keys = m.names(); Arrays.sort(keys);
@@ -164,8 +167,11 @@ public final class ExtractionWorker {
         }
         private void emit(String source, String location, String text, String type, String resourceId,
                           String streamId, String kind, String representation) throws SAXException {
-            if (text.length() > MAX_TOTAL_CHARS - total) throw new SAXException("Total extracted text limit reached; remaining content not checked");
+            if (text.length() > MAX_TOTAL_CHARS - total) throw new CoverageLimitException("Total extracted text limit reached; remaining content not checked");
             total += text.length();
+            if (text.isEmpty()) send(Map.of("kind", "segment", "source", source, "location", location,
+                "text", "", "contentType", type, "origin", Map.of("resourceId", resourceId,
+                "streamId", streamId, "kind", kind, "representation", representation, "start", 0)));
             for (int start = 0; start < text.length();) {
                 int end = Math.min(start + 24000, text.length());
                 if (end < text.length()) {
@@ -201,7 +207,7 @@ public final class ExtractionWorker {
                 Path path = Path.of(request.get("path").asText());
                 String resourceName = request.path("resourceName").asText(path.getFileName().toString());
                 if (resourceName.toLowerCase(Locale.ROOT).endsWith(".onetoc2")) {
-                    issue("", "OneNote notebook index contains no section content; scan the local .one section files. Linked or cloud notebooks were not fetched.");
+                    issue("", "", "UnsupportedRepresentation", "OneNote notebook index contains no section content; scan the local .one section files. Linked or cloud notebooks were not fetched.");
                     send(Map.of("kind", "done"));
                     continue;
                 }
@@ -233,7 +239,7 @@ public final class ExtractionWorker {
                     new RecursiveParserWrapper(parser).parse(stream, handler, metadata, context);
                 }
             } catch (Throwable e) {
-                issue("", e.getClass().getSimpleName() + ": " + String.valueOf(e.getMessage()));
+                issue("", "", e instanceof org.apache.tika.exception.EncryptedDocumentException ? "Encrypted" : e instanceof CoverageLimitException ? "TextLimit" : "ExtractionFailure", e.getClass().getSimpleName() + ": " + String.valueOf(e.getMessage()));
                 if (e instanceof OutOfMemoryError) { send(Map.of("kind", "done")); return; }
             }
             send(Map.of("kind", "done"));

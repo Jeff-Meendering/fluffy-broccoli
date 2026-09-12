@@ -452,7 +452,7 @@ public sealed class ExtractionCoverageTests : IDisposable
         await foreach (var part in BinaryStrings.ReadAsync(Path.Combine(_temp, "dump.bin"), "", 50_000, default)) parts.Add(part);
         Assert.True(parts.Count(p => p.Issue is null) >= 2);
         Assert.All(parts.Where(p => p.Issue is null), p => Assert.StartsWith("binary strings · byte", p.Location));
-        Assert.Contains(parts, p => p.Issue is not null && p.Issue.Contains("limit"));
+        Assert.Contains(parts, p => p.Issue is not null && p.Reason == CoverageReason.TextLimit);
     }
 
     [Fact]

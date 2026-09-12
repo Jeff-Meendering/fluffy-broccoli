@@ -40,6 +40,8 @@ public sealed record EvidenceLocation(EvidenceOrigin Origin, long Start, long Le
 
 public sealed record ScanIssue(string FilePath, string Source, string Message)
 {
+    public CoverageReason Reason { get; init; } = CoverageReason.ExtractionFailure;
+    public string ResourceId { get; init; } = "root";
     public string DisplaySource => string.IsNullOrEmpty(Source) ? FilePath : FilePath + " > " + Source.TrimStart('/');
 }
 
@@ -55,12 +57,33 @@ public sealed record ScanOptions(bool Ocr = true, bool Names = true, int Workers
 }
 
 public sealed record ScanUpdate(string CurrentFile = "", int Discovered = 0, int Completed = 0,
-    IReadOnlyList<Finding>? Findings = null, IReadOnlyList<ScanIssue>? Issues = null);
+    IReadOnlyList<Finding>? Findings = null, IReadOnlyList<ScanIssue>? Issues = null, IReadOnlyList<InputOutcome>? Outcomes = null);
 
-public sealed record ScanSummary(int Files, int Completed, int Findings, int Issues, TimeSpan Elapsed, bool Cancelled);
+public enum CoverageStatus { Success, Partial, Failed, Excluded, Unchecked }
+public enum CoverageReason { None, ChildIncomplete, ExtractionFailure, Unsupported, UnsupportedRepresentation, Encrypted, Excluded, OcrDisabled,
+    OcrIncomplete, NoReadableText, FileSizeLimit, ArchiveDepthLimit, ArchiveMemberLimit, ArchiveSizeLimit,
+    TextLimit, FindingLimit, IssueLimit, Timeout, UserCancellation, SourceChanged, DiscoveryFailure }
+public enum ScanStopReason { None, UserCancellation, FindingLimit, IssueLimit }
+public sealed record InputOutcome(string FilePath, string Source, string ResourceId, CoverageStatus Status,
+    IReadOnlyList<CoverageReason> Reasons);
+public sealed record ScanConfiguration(bool Ocr, bool Names, bool Patterns, string PhoneRegions);
+public sealed record ScanSummary(int Files, int Completed, int Findings, int Issues, TimeSpan Elapsed, bool Cancelled)
+{
+    public IReadOnlyList<InputOutcome> Outcomes { get; init; } = [];
+    public ScanConfiguration? Configuration { get; init; }
+    public ScanStopReason StopReason { get; init; }
+    public CoverageStatus Status => Outcomes.Count == 0
+        ? (Cancelled || Issues > 0 ? CoverageStatus.Partial : CoverageStatus.Success)
+        : StopReason != ScanStopReason.None ? CoverageStatus.Partial
+        : Outcomes.All(o => o.Status == CoverageStatus.Success) ? CoverageStatus.Success
+        : Outcomes.All(o => o.Status == CoverageStatus.Failed) ? CoverageStatus.Failed : CoverageStatus.Partial;
+    public int SuccessfulFiles => Outcomes.Count(o => o.ResourceId == "root" && o.Status == CoverageStatus.Success);
+}
 public sealed record EntitySpan(string Type, int Start, int Length, double Confidence, string Method);
 public sealed record ExtractedPart(string Source, string Location, string Text, string ContentType, string? Issue = null)
 {
+    public bool CoverageComplete { get; init; }
+    public CoverageReason Reason { get; init; } = CoverageReason.ExtractionFailure;
     public EvidenceOrigin? Origin { get; init; }
 }
 

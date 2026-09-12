@@ -442,7 +442,8 @@ public sealed class ExtractionRegressionTests : IDisposable
         entries.Add(("unchecked.txt", Text("unchecked@example.net")));
         File.WriteAllBytes(Path.Combine(_temp, "directories.zip"), Zip(entries.ToArray()));
         var result = await Scan();
-        Assert.Contains(result.Issues, i => i.Message.Contains("member count limit"));
+        Assert.Contains(result.Issues, i => i.Reason == CoverageReason.ArchiveMemberLimit);
+        Assert.Contains(result.Summary.Outcomes, o => o.Reasons.Contains(CoverageReason.ArchiveMemberLimit));
         Assert.DoesNotContain(result.Findings, f => f.Value == "unchecked@example.net");
     }
 
@@ -451,7 +452,7 @@ public sealed class ExtractionRegressionTests : IDisposable
         for (int i = 0; i < 8; i++)
             File.WriteAllText(Path.Combine(_temp, $"file{i}.txt"), string.Join(' ', Enumerable.Range(0, 100).Select(n => $"p{i}.{n}@example.net")));
         var result = await Scan(new(Ocr: false, Names: false, Workers: 4, MaxFindings: 25));
-        Assert.True(result.Summary.Cancelled);
+        Assert.False(result.Summary.Cancelled); Assert.Equal(ScanStopReason.FindingLimit, result.Summary.StopReason);
         Assert.Equal(25, result.Summary.Findings);
         Assert.Equal(25, result.Findings.Length);
         Assert.Single(result.Issues, i => i.Message.Contains("Finding limit"));
@@ -471,7 +472,9 @@ public sealed class ExtractionRegressionTests : IDisposable
         else { bytes[8] = 0xff; bytes[9] = 0xff; bytes[central + 10] = 0xff; bytes[central + 11] = 0xff; }
         File.WriteAllBytes(Path.Combine(_temp, "mixed.zip"), bytes);
         var result = await Scan();
-        Assert.Contains(result.Issues, i => i.Source == "bad.txt");
+        Assert.Contains(result.Issues, i => i.Source == "bad.txt" && i.Reason == (encrypted ? CoverageReason.Encrypted : CoverageReason.ExtractionFailure));
+        Assert.Equal(CoverageStatus.Partial, result.Summary.Status);
+        Assert.Equal(CoverageStatus.Success, result.Summary.Outcomes.Single(o => o.Source == "good.txt").Status);
         Assert.Contains(result.Findings, f => f.Value == "good@example.net" && f.Source == "good.txt");
     }
 

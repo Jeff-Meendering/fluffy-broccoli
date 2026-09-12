@@ -15,7 +15,7 @@ public static class PdfReport
     public static Dictionary<(string, string), string> SourceLabels(ReportSnapshot report)
     {
         var text = new ReportText(report);
-        return report.Findings.Select(f => (f.FilePath, f.Source)).Concat(report.Issues.Select(i => (i.FilePath, i.Source)))
+        return report.Findings.Select(f => (f.FilePath, f.Source)).Concat(report.Issues.Select(i => (i.FilePath, i.Source))).Concat(report.Summary.Outcomes.Select(o => (o.FilePath, o.Source)))
             .Distinct().ToDictionary(s => s, s => text.Source(s.FilePath, s.Source));
     }
 
@@ -65,8 +65,7 @@ public static class PdfReport
             ?? throw new IOException("Could not create a PDF report.");
         using var layout = new ReportLayout(document, typeface, token);
         layout.Heading("PII findings", 25);
-        layout.Paragraph(report.Summary.Cancelled ? "PARTIAL SCAN - stopped before all content was checked" :
-            report.Issues.Count > 0 ? "SCAN FINISHED - some content needs attention" : "SCAN FINISHED", 11, accent: true);
+        layout.Paragraph($"{(report.Summary.Status == CoverageStatus.Partial ? "PARTIAL SCAN" : report.Summary.Status == CoverageStatus.Failed ? "FAILED SCAN" : "SCAN FINISHED")}. Coverage: {report.Summary.Status}. Stop reason: {report.Summary.StopReason}", 11, accent: true);
         layout.Paragraph($"{report.Findings.Count:N0} findings   |   {report.Summary.Completed:N0} / {report.Summary.Files:N0} files processed   |   {report.Issues.Count:N0} attention items");
         layout.Paragraph($"Image reading: {(report.ScanOptions.Ocr ? "on" : "off")}. People’s names: {(report.ScanOptions.Names ? "on" : "off")}. File limit: {report.ScanOptions.MaxFileBytes / 1024 / 1024:N0} MiB. Timeout: {report.ScanOptions.FileTimeoutSeconds} seconds.", 9);
         layout.Paragraph("Potential PII requires review. No findings does not prove that a file contains no PII. Files processed includes files that could not be fully read; see Needs attention.", 9);
@@ -97,6 +96,12 @@ public static class PdfReport
             if (number % 250 == 0) progress?.Report(number);
         }
         layout.Ensure(130);
+        layout.Heading("Input coverage", 17);
+        foreach (var outcome in report.Summary.Outcomes) {
+            token.ThrowIfCancellationRequested();
+            layout.Paragraph(privacy.Source(outcome.FilePath, outcome.Source) + " | " + outcome.ResourceId +
+                " | " + outcome.Status + " | " + string.Join(", ", outcome.Reasons), 9);
+        }
         layout.Heading("Needs attention", 17);
         if (report.Issues.Count == 0) layout.Paragraph(report.Summary.Cancelled
             ? "No individual file issues were recorded. The scan was stopped; some content may not have been checked."
@@ -144,12 +149,12 @@ public static class PdfReport
         {
             _report = report;
             var comparison = OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
-            _files = report.Findings.Select(f => f.FilePath).Concat(report.Issues.Select(i => i.FilePath))
+            _files = report.Findings.Select(f => f.FilePath).Concat(report.Issues.Select(i => i.FilePath)).Concat(report.Summary.Outcomes.Select(o => o.FilePath))
                 .Distinct(comparison).OrderBy(f => f, StringComparer.Ordinal).Select((f, i) => (f, id: $"File {i + 1:D5}"))
                 .ToDictionary(p => p.f, p => p.id, comparison);
             _privatePrefixes = new[] { Path.GetFullPath(report.Root), Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), Path.GetTempPath().TrimEnd(Path.DirectorySeparatorChar) }
                 .Where(s => s.Length > 3).SelectMany(s => new[] { s, s.Replace('\\', '/') }).Distinct().OrderByDescending(s => s.Length).ToArray();
-            foreach (var item in report.Findings.Select(f => (f.FilePath, f.Source)).Concat(report.Issues.Select(i => (i.FilePath, i.Source))))
+            foreach (var item in report.Findings.Select(f => (f.FilePath, f.Source)).Concat(report.Issues.Select(i => (i.FilePath, i.Source))).Concat(report.Summary.Outcomes.Select(o => (o.FilePath, o.Source))))
                 if (item.Source.Length > 0 && !_parts.ContainsKey(item)) _parts[item] = "Part " + (_parts.Count + 1).ToString("D5", CultureInfo.InvariantCulture);
         }
 

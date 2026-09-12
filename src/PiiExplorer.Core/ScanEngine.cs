@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Buffers;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
@@ -44,6 +45,9 @@ public sealed class ScanEngine(RuntimePaths paths)
         string[] missing = paths.Missing(options.Names, options.Ocr).ToArray();
         if (missing.Length > 0) throw new InvalidOperationException("The application package is incomplete. Missing: " + string.Join(", ", missing.Select(Path.GetFileName)));
         var watch = Stopwatch.StartNew();
+        var coverage = new ConcurrentDictionary<string, ConcurrentDictionary<string, CoverageEntry>>();
+        int stopReason = 0;
+        CoverageEntry Entry(string file, string resource = "root", string source = "") => coverage.GetOrAdd(file, _ => new()).GetOrAdd(resource, _ => new(file, source, resource));
         int completed = 0, count = 0, issueCount = 0, discovered = 0;
         using var limitCancellation = CancellationTokenSource.CreateLinkedTokenSource(token);
         var cancellation = limitCancellation.Token;
@@ -52,8 +56,17 @@ public sealed class ScanEngine(RuntimePaths paths)
             SingleWriter = true,
             FullMode = BoundedChannelFullMode.Wait
         });
-        void Issue(string file, string source, string message)
+        void Issue(string file, string source, string message, CoverageReason reason = CoverageReason.ExtractionFailure, string resourceId = "root")
         {
+            Entry(file, resourceId, source).Add(reason);
+            if (resourceId != "root") {
+                Entry(file).Add(CoverageReason.ChildIncomplete);
+                int slash = resourceId.LastIndexOf('/');
+                while (slash > 0) {
+                    Entry(file, resourceId[..slash]).Add(CoverageReason.ChildIncomplete);
+                    slash = resourceId.LastIndexOf('/', slash - 1);
+                }
+            }
             int reserved;
             do { reserved = Volatile.Read(ref issueCount); }
             while (reserved < options.MaxIssues && Interlocked.CompareExchange(ref issueCount, reserved + 1, reserved) != reserved);
@@ -61,9 +74,10 @@ public sealed class ScanEngine(RuntimePaths paths)
             if (reserved == options.MaxIssues - 1)
             {
                 message = "Attention item limit reached; scan stopped with remaining content unchecked. Scan smaller folders. Last issue: " + message;
+                Interlocked.CompareExchange(ref stopReason, (int)ScanStopReason.IssueLimit, 0);
                 limitCancellation.Cancel();
             }
-            progress.Report(new(Issues: [new(file, source, message)]));
+            progress.Report(new(Issues: [new(file, source, message) { Reason = reason, ResourceId = resourceId }]));
         }
         int workerCount = Math.Clamp(options.Workers, 1, ScanOptions.MaxWorkers);
         // One inference session serves every worker; give it the cores the workers leave idle.
@@ -82,21 +96,22 @@ public sealed class ScanEngine(RuntimePaths paths)
                         foreach (var entry in new DirectoryInfo(folder).EnumerateFileSystemInfos())
                         {
                             cancellation.ThrowIfCancellationRequested();
-                            if ((entry.Attributes & FileAttributes.ReparsePoint) != 0) { Issue(entry.FullName, "", "Link not followed"); continue; }
+                            if ((entry.Attributes & FileAttributes.ReparsePoint) != 0) { Issue(entry.FullName, "", "Link not followed", CoverageReason.Excluded); continue; }
                             if (entry is DirectoryInfo)
                             {
-                                if (Excluded.Contains(entry.Name)) Issue(entry.FullName, "", "Dependency or system folder excluded");
+                                if (Excluded.Contains(entry.Name)) Issue(entry.FullName, "", "Dependency or system folder excluded", CoverageReason.Excluded);
                                 else pending.Push(entry.FullName);
                             }
                             else
                             {
+                                Entry(entry.FullName);
                                 Interlocked.Increment(ref discovered);
                                 await files.Writer.WriteAsync(entry.FullName, cancellation);
                                 if (discovered % 128 == 0) progress.Report(new(Discovered: Volatile.Read(ref discovered)));
                             }
                         }
                     }
-                    catch (Exception e) when (e is IOException or UnauthorizedAccessException) { Issue(folder, "", "Cannot list folder: " + e.Message); }
+                    catch (Exception e) when (e is IOException or UnauthorizedAccessException) { Issue(folder, "", "Cannot list folder: " + e.Message, CoverageReason.DiscoveryFailure); }
                 }
             }
             catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
@@ -131,12 +146,15 @@ public sealed class ScanEngine(RuntimePaths paths)
                         initialFile = new FileInfo(file);
                         initialLength = initialFile.Length; initialWrite = initialFile.LastWriteTimeUtc;
                         Detect(new("", "file / folder name", Path.GetRelativePath(root, file).Replace('_', ' '), "text/plain") { Origin = new("root", "name", EvidenceKind.FileName, TextRepresentation.SynthesizedText) });
-                        if (initialLength > options.MaxFileBytes) { Issue(file, "", $"File exceeds {options.MaxFileBytes / 1024 / 1024} MiB limit"); continue; }
+                        if (initialLength > options.MaxFileBytes) { Issue(file, "", $"File exceeds {options.MaxFileBytes / 1024 / 1024} MiB limit", CoverageReason.FileSizeLimit); continue; }
                         await foreach (var part in ExtractAsync(file, "", options, extractor, new(), 0, ct))
                         {
                             ct.ThrowIfCancellationRequested();
-                            if (part.Issue is not null) Issue(file, part.Source, part.Issue);
-                            else Detect(part);
+                            string resource = part.Origin?.ResourceId ?? "root";
+                            Entry(file, resource, part.Source);
+                            if (part.CoverageComplete) { Entry(file, resource, part.Source).Finished = true; continue; }
+                            if (part.Issue is not null) Issue(file, part.Source, part.Issue, part.Reason, resource);
+                            else { Detect(part); if (part.Origin?.Kind is not (EvidenceKind.FileName or EvidenceKind.ArchiveMemberName)) Entry(file, resource, part.Source).Read = true; }
                         }
                         void Detect(ExtractedPart part)
                         {
@@ -167,7 +185,8 @@ public sealed class ScanEngine(RuntimePaths paths)
                                         if (reserved >= options.MaxFindings)
                                         {
                                             if (Interlocked.Exchange(ref findingLimitReported, 1) == 0)
-                                                Issue(file, part.Source, "Finding limit reached. Scan a smaller folder to see remaining content.");
+                                                Issue(file, part.Source, "Finding limit reached. Scan a smaller folder to see remaining content.", CoverageReason.FindingLimit, origin.ResourceId);
+                                            Interlocked.CompareExchange(ref stopReason, (int)ScanStopReason.FindingLimit, 0);
                                             limitCancellation.Cancel(); break;
                                         }
                                         int lo = Math.Max(0, span.Start - 80), hi = Math.Min(part.Text.Length, span.Start + span.Length + 100);
@@ -185,7 +204,7 @@ public sealed class ScanEngine(RuntimePaths paths)
                     }
                     catch (OperationCanceledException)
                     {
-                        extractor.Stop(); if (!cancellation.IsCancellationRequested) Issue(file, "", $"File timeout after {options.FileTimeoutSeconds} seconds; remaining content unchecked");
+                        extractor.Stop(); if (!cancellation.IsCancellationRequested) Issue(file, "", $"File timeout after {options.FileTimeoutSeconds} seconds; remaining content unchecked", CoverageReason.Timeout);
                     }
                     catch (Exception e)
                     {
@@ -199,10 +218,17 @@ public sealed class ScanEngine(RuntimePaths paths)
                             {
                                 initialFile.Refresh();
                                 if (!initialFile.Exists || initialFile.Length != initialLength || initialFile.LastWriteTimeUtc != initialWrite)
-                                    Issue(file, "", "Source changed during scanning; findings may not describe one consistent version. Rescan a stable copy.");
+                                    Issue(file, "", "Source changed during scanning; findings may not describe one consistent version. Rescan a stable copy.", CoverageReason.SourceChanged);
                             }
                             catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-                            { Issue(file, "", "Could not verify source stability after scanning."); }
+                            { Issue(file, "", "Could not verify source stability after scanning.", CoverageReason.SourceChanged); }
+                        }
+                        foreach (var item in coverage[file].Values)
+                        {
+                            if (!item.Finished && cancellation.IsCancellationRequested) item.Add(token.IsCancellationRequested ? CoverageReason.UserCancellation :
+                                (ScanStopReason)stopReason == ScanStopReason.FindingLimit ? CoverageReason.FindingLimit : CoverageReason.IssueLimit);
+                            if (!item.Finished && Entry(file).Reasons.Contains(CoverageReason.Timeout)) item.Add(CoverageReason.Timeout);
+                            item.Finished = true;
                         }
                         Interlocked.Increment(ref completed); progress.Report(new(file, Volatile.Read(ref discovered), Volatile.Read(ref completed)));
                     }
@@ -212,7 +238,15 @@ public sealed class ScanEngine(RuntimePaths paths)
             catch (Exception) { limitCancellation.Cancel(); throw; }
         }, CancellationToken.None)).ToArray();
         await Task.WhenAll(workers.Append(discovery));
-        return new(discovered, completed, Math.Min(count, options.MaxFindings), issueCount, watch.Elapsed, cancellation.IsCancellationRequested);
+        var stop = token.IsCancellationRequested ? ScanStopReason.UserCancellation : (ScanStopReason)stopReason;
+        foreach (var item in coverage.Values.SelectMany(e => e.Values).Where(e => !e.Finished && e.Reasons.Count == 0))
+            item.Add(stop == ScanStopReason.UserCancellation ? CoverageReason.UserCancellation :
+                stop == ScanStopReason.FindingLimit ? CoverageReason.FindingLimit : CoverageReason.IssueLimit);
+        var outcomes = coverage.Values.SelectMany(e => e.Values).Select(e => e.Outcome()).OrderBy(e => e.FilePath, StringComparer.Ordinal)
+            .ThenBy(e => e.ResourceId, StringComparer.Ordinal).ToArray();
+        foreach (var outcome in outcomes) progress.Report(new(Outcomes: [outcome]));
+        return new(discovered, completed, Math.Min(count, options.MaxFindings), issueCount, watch.Elapsed, token.IsCancellationRequested)
+        { Outcomes = outcomes, StopReason = stop, Configuration = new(options.Ocr, options.Names, true, options.PhoneRegions) };
     }
 
     private async IAsyncEnumerable<ExtractedPart> ExtractAsync(string file, string source, ScanOptions options,
@@ -230,12 +264,16 @@ public sealed class ScanEngine(RuntimePaths paths)
                 extractor.Stop();
                 failed = new(source, "", "", "", "Could not fully check file: " + e.GetType().Name + ": " + e.Message);
             }
-            if (failed is not null) { yield return failed; yield break; }
-            if (!moved) break;
+            if (failed is not null) { yield return failed with { Origin = new(resourceId, "coverage", EvidenceKind.Body, TextRepresentation.ExtractedText) }; yield break; }
+            if (!moved) {
+                yield return new(source, "", "", "") { CoverageComplete = true,
+                    Origin = new(resourceId, "coverage", EvidenceKind.Body, TextRepresentation.ExtractedText) };
+                break;
+            }
             var current = parts.Current;
             if (current.Issue is null && current.Origin is null)
                 throw new InvalidDataException("Extraction part has no evidence origin");
-            yield return current;
+            yield return current.Origin is null ? current with { Origin = new(resourceId, "coverage", EvidenceKind.Body, TextRepresentation.ExtractedText) } : current;
         }
     }
 
@@ -246,7 +284,7 @@ public sealed class ScanEngine(RuntimePaths paths)
         string ext = await ArchiveExtensionAsync(file, token) ?? Path.GetExtension(resourceName);
         if (Archives.Contains(ext))
         {
-            if (depth >= 4) { yield return new(source, "", "", "", "Archive nesting limit reached"); yield break; }
+            if (depth >= 4) { yield return new(source, "", "", "", "Archive nesting limit reached") { Reason = CoverageReason.ArchiveDepthLimit }; yield break; }
             string temp = Directory.CreateTempSubdirectory("PiiExplorer-").FullName;
             try
             {
@@ -270,7 +308,7 @@ public sealed class ScanEngine(RuntimePaths paths)
                         if (++budget.Members > 2000)
                         {
                             budget.Exhausted = true;
-                            yield return new(memberSource, "", "", "", "Archive member count limit reached; remaining archive content unchecked");
+                            yield return new(memberSource, "", "", "", "Archive member count limit reached; remaining archive content unchecked") { Reason = CoverageReason.ArchiveMemberLimit, Origin = new(memberId, "coverage", EvidenceKind.Body, TextRepresentation.ExtractedText) };
                             yield break;
                         }
                         if (entry.IsDirectory) continue;
@@ -278,7 +316,7 @@ public sealed class ScanEngine(RuntimePaths paths)
                         { Origin = new(memberId, "name", EvidenceKind.ArchiveMemberName, TextRepresentation.SynthesizedText) };
                         if (entry.IsEncrypted || !string.IsNullOrEmpty(entry.LinkTarget))
                         {
-                            yield return new(memberSource, "", "", "", entry.IsEncrypted ? "Password-protected archive member" : "Archive link not followed");
+                            yield return new(memberSource, "", "", "", entry.IsEncrypted ? "Password-protected archive member" : "Archive link not followed") { Reason = entry.IsEncrypted ? CoverageReason.Encrypted : CoverageReason.Excluded, Origin = new(memberId, "coverage", EvidenceKind.Body, TextRepresentation.ExtractedText) };
                             continue;
                         }
                         string? target = null; string? error = null;
@@ -291,7 +329,7 @@ public sealed class ScanEngine(RuntimePaths paths)
                         {
                             error = e.Message + (budget.Exhausted ? "; remaining archive content unchecked" : "; member unchecked");
                         }
-                        if (error is not null) { yield return new(memberSource, "", "", "", error); continue; }
+                        if (error is not null) { yield return new(memberSource, "", "", "", error) { Reason = budget.Exhausted ? CoverageReason.ArchiveSizeLimit : CoverageReason.ExtractionFailure, Origin = new(memberId, "coverage", EvidenceKind.Body, TextRepresentation.ExtractedText) }; continue; }
                         try
                         {
                             await foreach (var part in ExtractAsync(target!, memberSource, options, extractor, budget, depth + 1, token, key, memberId)) yield return part;
@@ -315,7 +353,7 @@ public sealed class ScanEngine(RuntimePaths paths)
                     {
                         budget.Exhausted = true;
                         reader.Cancel();
-                        yield return new(memberSource, "", "", "", "Archive member count limit reached; remaining archive content unchecked");
+                        yield return new(memberSource, "", "", "", "Archive member count limit reached; remaining archive content unchecked") { Reason = CoverageReason.ArchiveMemberLimit, Origin = new(memberId, "coverage", EvidenceKind.Body, TextRepresentation.ExtractedText) };
                         yield break;
                     }
                     if (reader.Entry.IsDirectory) continue;
@@ -327,7 +365,7 @@ public sealed class ScanEngine(RuntimePaths paths)
                         reader.Cancel();
                         yield return new(memberSource, "", "", "", reader.Entry.IsEncrypted
                             ? "Password-protected archive member; remaining archive content unchecked"
-                            : "Archive link not followed; remaining archive content unchecked");
+                            : "Archive link not followed; remaining archive content unchecked") { Reason = reader.Entry.IsEncrypted ? CoverageReason.Encrypted : CoverageReason.Excluded, Origin = new(memberId, "coverage", EvidenceKind.Body, TextRepresentation.ExtractedText) };
                         yield break;
                     }
                     string? target = null; string? error = null;
@@ -341,7 +379,7 @@ public sealed class ScanEngine(RuntimePaths paths)
                     {
                         reader.Cancel(); error = e.Message + "; remaining archive content unchecked";
                     }
-                    if (error is not null) { yield return new(memberSource, "", "", "", error); yield break; }
+                    if (error is not null) { yield return new(memberSource, "", "", "", error) { Reason = budget.Exhausted ? CoverageReason.ArchiveSizeLimit : CoverageReason.ExtractionFailure, Origin = new(memberId, "coverage", EvidenceKind.Body, TextRepresentation.ExtractedText) }; yield break; }
                     try
                     {
                         await foreach (var part in ExtractAsync(target!, memberSource, options, extractor, budget, depth + 1, token, key, memberId)) yield return part;
@@ -357,12 +395,12 @@ public sealed class ScanEngine(RuntimePaths paths)
             try { imageParts = await ImageReader.ReadAsync(file, source, paths, token); }
             catch (Exception e) when (e is not OperationCanceledException && !token.IsCancellationRequested)
             {
-                imageParts = [new(source, "", "", "", "Image OCR incomplete: " + e.Message)];
+                imageParts = [new(source, "", "", "", "Image OCR incomplete: " + e.Message) { Reason = CoverageReason.OcrIncomplete }];
             }
             foreach (var part in imageParts) yield return WithSource(part with { Source = "" });
             await foreach (var part in extractor.ReadAsync(file, false, token, resourceName))
                 if ((part.Issue is null && part.Location.StartsWith("metadata:")) || (part.Issue is not null &&
-                    !part.Issue.StartsWith("Image content was not OCR") && !part.Issue.StartsWith("No readable text extracted")))
+                    part.Reason != CoverageReason.OcrDisabled && part.Reason != CoverageReason.NoReadableText))
                     yield return WithSource(part);
         }
         else if ((ext.Equals(".csv", StringComparison.OrdinalIgnoreCase) || ext.Equals(".tsv", StringComparison.OrdinalIgnoreCase)) && await IsUnicodeTextAsync(file, token))
@@ -442,7 +480,7 @@ public sealed class ScanEngine(RuntimePaths paths)
             bool unsupported = false;
             await foreach (var part in extractor.ReadAsync(file, options.Ocr, token, resourceName))
             {
-                if (part.Issue is not null && part.Source.Length == 0 && part.Issue.StartsWith("Unsupported content:", StringComparison.Ordinal))
+                if (part.Issue is not null && part.Source.Length == 0 && part.Reason == CoverageReason.Unsupported)
                 { unsupported = true; continue; }
                 yield return WithSource(part);
             }
@@ -450,7 +488,7 @@ public sealed class ScanEngine(RuntimePaths paths)
             // dumps, databases and unknown binaries still surface embedded identifiers.
             if (unsupported)
             {
-                yield return new(source, "", "", "", "Unrecognized format; only readable ASCII/UTF-16 strings were checked, so structured, compressed or encrypted content may hide PII");
+                yield return new(source, "", "", "", "Unrecognized format; only readable ASCII/UTF-16 strings were checked, so structured, compressed or encrypted content may hide PII") { Reason = CoverageReason.Unsupported };
                 await foreach (var part in BinaryStrings.ReadAsync(file, "", 16_000_000, token)) yield return WithSource(part);
             }
         }

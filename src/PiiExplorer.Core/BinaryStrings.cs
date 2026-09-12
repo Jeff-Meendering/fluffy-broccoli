@@ -64,7 +64,7 @@ internal static class BinaryStrings
         }
         finally { ArrayPool<byte>.Shared.Return(buffer, clearArray: true); }
 
-        ExtractedPart Limit() => new(source, "", "", "", "Binary string extraction limit reached; remaining content unchecked");
+        ExtractedPart Limit() => new(source, "", "", "", "Binary string extraction limit reached; remaining content unchecked") { Reason = CoverageReason.TextLimit };
     }
 
     // Keep each contiguous run separate: combining unrelated byte ranges invents

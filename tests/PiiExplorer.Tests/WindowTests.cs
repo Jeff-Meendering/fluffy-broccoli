@@ -91,6 +91,7 @@ public class WindowTests
             Assert.True(scan.IsEnabled);
             Assert.True(window.FindControl<Button>("ExportButton")!.IsEnabled);
             Assert.Contains(window.FindControl<DataGrid>("FindingsGrid")!.ItemsSource.Cast<Finding>(), f => f.Value == "ui.check@example.com");
+            File.WriteAllText(Path.Combine(folder, "notes.txt"), new string('x', 5_000_000));
             scan.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
             Assert.False(window.FindControl<Button>("ExportButton")!.IsEnabled);
             window.FindControl<Button>("StopButton")!.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));

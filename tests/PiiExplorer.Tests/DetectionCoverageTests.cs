@@ -46,11 +46,12 @@ public sealed class DetectionCoverageTests
     }
 
     [Fact]
-    public void PhoneRegionsAreConfigurableAndInvalidCodesAreIgnored()
+    public void PhoneRegionsAreConfigurableAndInvalidCodesAreRejected()
     {
         const string text = "Call 030 1234567 from Berlin";
         Assert.DoesNotContain(new PatternDetector("US,GB").Detect(text), s => s.Type == "Phone");
-        var german = new PatternDetector("de, nope, US");
+        Assert.Throws<ArgumentException>(() => new PatternDetector("de, nope, US"));
+        var german = new PatternDetector("de, US");
         Assert.Equal(new[] { "DE", "US" }, german.PhoneRegions);
         Assert.Contains(german.Detect(text), s => s.Type == "Phone");
     }
@@ -452,7 +453,7 @@ public sealed class ExtractionCoverageTests : IDisposable
         await foreach (var part in BinaryStrings.ReadAsync(Path.Combine(_temp, "dump.bin"), "", 50_000, default)) parts.Add(part);
         Assert.True(parts.Count(p => p.Issue is null) >= 2);
         Assert.All(parts.Where(p => p.Issue is null), p => Assert.StartsWith("binary strings · byte", p.Location));
-        Assert.Contains(parts, p => p.Issue is not null && p.Issue.Contains("limit"));
+        Assert.Contains(parts, p => p.Issue is not null && p.Reason == CoverageReason.TextLimit);
     }
 
     [Fact]

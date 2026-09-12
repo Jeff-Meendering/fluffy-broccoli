@@ -18,7 +18,7 @@ public sealed class ReadinessRegressionTests : IDisposable
         var summary = await new ScanEngine(TestPaths.Assets).ScanAsync(_temp,
             new(Ocr: false, Names: false, MaxFileBytes: 1, MaxIssues: 2),
             new InlineProgress<ScanUpdate>(u => { foreach (var issue in u.Issues ?? []) issues.Add(issue); }), default);
-        Assert.True(summary.Cancelled);
+        Assert.False(summary.Cancelled); Assert.Equal(ScanStopReason.IssueLimit, summary.StopReason);
         Assert.Equal(2, summary.Issues);
         Assert.Equal(2, issues.Count);
         Assert.Single(issues, i => i.Message.StartsWith("Attention item limit reached"));
@@ -39,7 +39,9 @@ public sealed class ReadinessRegressionTests : IDisposable
                 foreach (var issue in u.Issues ?? []) issues.Add(issue);
             }), default);
         Assert.Equal(1, summary.Completed);
-        Assert.Contains(issues, i => i.Message.StartsWith("Source changed during scanning"));
+        Assert.Contains(issues, i => i.Reason == CoverageReason.SourceChanged);
+        Assert.Contains(CoverageReason.SourceChanged, Assert.Single(summary.Outcomes).Reasons);
+        Assert.Equal(CoverageStatus.Partial, summary.Status);
     }
 
     [Fact]
@@ -53,6 +55,9 @@ public sealed class ReadinessRegressionTests : IDisposable
                 foreach (var finding in u.Findings ?? []) { findings.Add(finding); cancellation.Cancel(); }
             }), cancellation.Token).WaitAsync(TimeSpan.FromSeconds(15));
         Assert.True(summary.Cancelled);
+        Assert.Equal(ScanStopReason.UserCancellation, summary.StopReason);
+        Assert.Equal(summary.Files, summary.Outcomes.Count);
+        Assert.DoesNotContain(summary.Outcomes, o => o.Status == CoverageStatus.Success);
         Assert.InRange(summary.Files, 1, 259); // Active file + bounded queue + pending writer.
         Assert.Equal(1, summary.Completed);
         Assert.Equal(summary.Findings, findings.Count);
@@ -71,6 +76,9 @@ public sealed class ReadinessRegressionTests : IDisposable
                 if (u.Findings?.Any(f => f.Type == "Email") == true) cancellation.Cancel();
             }), cancellation.Token).WaitAsync(TimeSpan.FromSeconds(15));
         Assert.True(summary.Cancelled);
+        Assert.Equal(ScanStopReason.UserCancellation, summary.StopReason);
+        Assert.Equal(summary.Files, summary.Outcomes.Count);
+        Assert.DoesNotContain(summary.Outcomes, o => o.Status == CoverageStatus.Success);
         Assert.Contains(findings, f => f.Value == "synthetic@example.com");
         Assert.DoesNotContain(findings, f => f.Location.StartsWith("text") && f.Method == "Local model");
         Assert.Equal(findings.Count, summary.Findings);

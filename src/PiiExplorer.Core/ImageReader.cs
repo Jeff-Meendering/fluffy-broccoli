@@ -33,8 +33,8 @@ public static class ImageReader
             var parts = new List<ExtractedPart> { new(source, $"OCR · average word confidence {best.Score:F0}%", best.Text, "text/plain")
                 { Origin = new("", "ocr:frame:0", EvidenceKind.Ocr, TextRepresentation.OcrText) } };
             if (best.Text.Length == 0 || best.Score < 65)
-                parts.Add(new(source, "", "", "", "OCR found little or uncertain text. Handwriting, rotation or low resolution may hide PII; review the image."));
-            if (codec.FrameCount > 1) parts.Add(new(source, "", "", "", "Only the first animation frame was OCR checked"));
+                parts.Add(new(source, "", "", "", "OCR found little or uncertain text. Handwriting, rotation or low resolution may hide PII; review the image.") { Reason = CoverageReason.OcrIncomplete });
+            if (codec.FrameCount > 1) parts.Add(new(source, "", "", "", "Only the first animation frame was OCR checked") { Reason = CoverageReason.OcrIncomplete });
             return parts.ToArray();
         } finally { Directory.Delete(temp, true); }
     }

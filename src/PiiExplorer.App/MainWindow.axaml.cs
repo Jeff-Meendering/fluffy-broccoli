@@ -102,11 +102,11 @@ public partial class MainWindow : Window
             var engine = new ScanEngine(_paths);
             var options = _scanOptions = new ScanOptions(OcrCheck.IsChecked == true, NamesCheck.IsChecked == true,
                 Workers: (int)(WorkerCount.Value ?? ScanOptions.DefaultWorkers), MaxFileBytes: (long)(SizeLimit.Value ?? 100) * 1024 * 1024,
-                PhoneRegions: string.IsNullOrWhiteSpace(PhoneRegionsBox.Text) ? "US,GB" : PhoneRegionsBox.Text);
+                PhoneRegions: PhoneRegionsBox.Text ?? "");
             var summary = _summary = await Task.Run(() => engine.ScanAsync(folder, options,
                 new InlineProgress<ScanUpdate>(_pending.Enqueue), _cancellation.Token));
             Drain(all: true);
-            StatusText.Text = $"{(summary.Cancelled ? "Stopped" : "Finished")} · {summary.Completed:N0}/{summary.Files:N0} files · {_all.Count:N0} findings · {_issues.Count:N0} attention items · {summary.Elapsed.TotalSeconds:N0}s";
+            StatusText.Text = $"{(summary.Cancelled ? "Stopped - " : "")}{summary.Status} · {summary.SuccessfulFiles:N0}/{summary.Files:N0} fully checked files ({summary.StopReason}) · {_all.Count:N0} findings · {_issues.Count:N0} attention items · {summary.Elapsed.TotalSeconds:N0}s";
             if (_all.Count == 0) SourceText.Text = "No PII was detected in the checked content. Review any attention items; detection is not exhaustive.";
         } catch (OperationCanceledException) { StatusText.Text = "Stopped. Findings already collected are still available."; }
         catch (Exception error) { StatusText.Text = error.Message; }

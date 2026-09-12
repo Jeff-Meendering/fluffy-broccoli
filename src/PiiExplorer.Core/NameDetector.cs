@@ -5,7 +5,7 @@ using System.Text.RegularExpressions;
 
 namespace PiiExplorer.Core;
 
-public sealed class NameDetector : IDisposable
+public sealed class NameDetector : IDisposable, IRecognizer
 {
     private readonly InferenceSession _session;
     private readonly Dictionary<string, int> _vocabulary;
@@ -375,5 +375,8 @@ public sealed class NameDetector : IDisposable
         // "SSN: 123-45-6789" is a label plus a detected value: nothing is left for the model.
         return remaining is not null && OnlyLabel.IsMatch(new string(remaining));
     }
+    public string Id => "names";
+    IEnumerable<EntitySpan> IRecognizer.Detect(string text, CancellationToken token) => Detect(text, token);
+
     public void Dispose() => _session.Dispose();
 }

@@ -21,3 +21,13 @@ Before saving a checkpoint, run `git status --short` and `git add --dry-run .` a
 ## License and contribution terms
 
 PII Explorer is licensed under the [Apache License 2.0](LICENSE); see [NOTICE](NOTICE) for attribution. By submitting a contribution you certify that you may do so and you license it to the project under those same terms, including the patent grant in section 3. Add or update a third-party component only with its license text under `licenses` and an entry in `THIRD-PARTY-NOTICES.md`; those notices describe their respective components, not a license grant for this application. Report vulnerabilities privately through [SECURITY.md](SECURITY.md), never in a public issue.
+
+## Coverage outcomes
+
+Every discovered filesystem input and observed archive/parser resource has a durable `InputOutcome` in `ScanSummary.Outcomes`, including clean and empty files. Excluded directories have an outcome for the directory; their unenumerated descendants are not claimed as discovered. `Files` counts enumerated regular files, while `Completed` remains the legacy count of attempted files. Use `SuccessfulFiles`, `Status`, and individual outcomes to assess coverage. Success means the enabled detection policy finished, not absence of PII or exhaustive recognition.
+
+`ScanSummary.Configuration` records OCR, names, patterns and phone regions. `Cancelled` now means user cancellation only; `StopReason` distinguishes it from finding and attention-item limits. Pending discovered inputs receive unchecked outcomes. A resource failure makes its containing resources partial; successfully finished siblings retain their outcomes. Reasons are typed at extraction/discovery boundaries, independent of diagnostic wording. The worker issue protocol requires `reason` and `resourceId`; rebuild Java assets with the client.
+
+The diagnostic `--scan-test` command includes outcomes and policy in its JSON summary. Exit codes are 0 for success, 2 for a stopped scan, 3 for partial coverage, 4 for failed coverage, and 1 for a command/setup error. The UI reports fully checked files and coverage status; PDF exports include individual outcomes, including inputs without findings. Coverage is retained in memory until export; resumable persistent cases remain I30.
+
+See [EXTENSIONS.md](EXTENSIONS.md) for recognizer/parser contracts, registration examples, configuration validation, and optional runtime requirements.

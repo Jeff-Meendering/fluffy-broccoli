@@ -45,7 +45,7 @@ internal static class Program
             var result = await new ScanEngine(new(AssetsOverride)).ScanAsync(folder,
                 new(Ocr: !args.Contains("--no-ocr"), Names: !args.Contains("--no-names")), updates, CancellationToken.None);
             Console.WriteLine(JsonSerializer.Serialize(new { kind = "summary", result }));
-            return result.Cancelled ? 2 : result.Issues > 0 ? 3 : 0;
+            return result.StopReason != ScanStopReason.None ? 2 : result.Status == CoverageStatus.Failed ? 4 : result.Status == CoverageStatus.Partial ? 3 : 0;
         } catch (Exception e) { Console.Error.WriteLine(e); return 1; }
     }
 }

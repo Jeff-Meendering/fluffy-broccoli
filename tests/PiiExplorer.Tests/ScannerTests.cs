@@ -106,7 +106,7 @@ public sealed class ScannerTests : IDisposable
     [Fact] public async Task FindingLimitStopsWithPartialResults() {
         File.WriteAllText(Path.Combine(_temp, "list.txt"), "a@example.com b@example.net c@example.org");
         var result = await Scan(new(Names: false, MaxFindings: 2));
-        Assert.True(result.Summary.Cancelled); Assert.Equal(2, result.Findings.Length);
+        Assert.False(result.Summary.Cancelled); Assert.Equal(ScanStopReason.FindingLimit, result.Summary.StopReason); Assert.Equal(2, result.Findings.Length);
         Assert.Contains(result.Issues, i => i.Message.Contains("Finding limit"));
     }
     [Fact] public async Task CancellationIsResponsive() {

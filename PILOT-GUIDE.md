@@ -10,6 +10,8 @@ Repeated values at different offsets appear as separate findings. Overlapping ex
 
 Selected findings and PDF reports identify the resource, text stream, representation, zero-based offset and length. Archive resource IDs use entry positions (including directory entries), so members with identical names remain distinguishable. IDs are local to the outer file and stable for unchanged inputs and extraction settings; changing container entries can change their IDs.
 
+A PDF report reproduces a detected value exactly, including values that begin with `/`, URLs and connection strings; only unambiguous host paths (file URIs, drive letters, UNC shares and the scan root, profile or temp folders) are replaced inside a value. Paths are also omitted from locations, context and attention-item reasons, and a path match stops at the end of the path so the reason or neighbouring text beside it is kept.
+
 Text offsets count UTF-16 code units in the identified representation; an emoji can occupy two units. Binary-string offsets and lengths count original bytes. Parsed documents and OCR use extracted-text coordinates, not PDF page positions, image boxes or file byte offsets. Table labels, separators and filename substitutions are explicitly marked as synthesized context. They do not establish an original-source range for redaction. Context retains the extraction text's line breaks. Detailed cell mappings are not yet available.
 
 ## Verify the download

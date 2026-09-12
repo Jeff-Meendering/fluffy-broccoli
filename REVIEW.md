@@ -28,6 +28,7 @@ Kept libphonenumber, the expanded identifier/credential/wallet rules, configurab
 
 Corrected these concrete defects:
 
+- One broad path-removal regex was applied to findings, context, metadata and errors alike. It replaced legitimate detected values that begin with `/`, including a reproduced email and a connection-string credential, and because a match ran to the end of the line it also removed the parser failure reason that followed a path. Reports now redact only unambiguous host paths from a detected value, keep each value verbatim inside its surrounding context, and stop a path match at the end of the path.
 - Fast gates skipped valid IPv6 addresses with few decimal digits, letter-heavy IBANs, POB addresses and supported medical/member/patient labels. IDNA-encoded email suffixes also work again.
 - Invalid year values could throw during national-ID validation, interrupting extraction of unrelated evidence. Zero-filled NHS/TFN placeholders are rejected.
 - Wallet validation now checks witness version, program length, padding and the appropriate Bech32/Bech32m checksum. Generic checksum validity alone was insufficient; short valid witness addresses were also missed. See [BIP-350](https://github.com/bitcoin/bips/blob/master/bip-0350.mediawiki).

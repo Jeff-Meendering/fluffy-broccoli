@@ -40,6 +40,20 @@ public sealed class AccuracyEvaluationTests : IDisposable
     {
         var report = AccuracyEvaluation.Run(Write(new EvaluationCase("nothing", [])), TestPaths.Assets, false);
         Assert.Null(report.Micro.Precision); Assert.Null(report.Micro.Recall); Assert.Null(report.Micro.F1);
+        Assert.Null(report.Micro.FalseNegativeProportion);
+        Assert.Equal(1, report.CleanDocuments);
+        Assert.Equal(0, report.FalsePositivesPerCleanDocument);
+    }
+
+    [Fact]
+    public void MissRateAndCleanDocumentFalsePositivesUseTheirOwnDenominators()
+    {
+        var report = AccuracyEvaluation.Run(Write(new EvaluationCase("a@example.com b@example.com", []),
+            new("Tom", [new("Person", 0, 3)])), TestPaths.Assets, false);
+        Assert.Equal(1, report.Micro.FalseNegativeProportion);
+        Assert.Equal(1, report.CleanDocuments);
+        Assert.Equal(2, report.FalsePositivesOnCleanDocuments);
+        Assert.Equal(2, report.FalsePositivesPerCleanDocument);
     }
 
     [Theory]

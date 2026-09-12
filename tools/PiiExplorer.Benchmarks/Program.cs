@@ -3,6 +3,8 @@ using System.Collections.Concurrent;
 using System.Text.Json;
 using PiiExplorer.Core;
 
+if (args.FirstOrDefault() == "--accuracy-predict") return AccuracyPrediction.Run(args);
+
 if (args.Length < 2) {
     Console.Error.WriteLine("Usage: PiiExplorer.Benchmarks <project root> <output.json> [repetitions=3] [--mixed-only] [--capture-fixture-findings]");
     return 1;

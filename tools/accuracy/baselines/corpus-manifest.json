@@ -1,0 +1,80 @@
+{
+  "schema": 1,
+  "source": {
+    "dataset": "gretelai/gretel-pii-masking-en-v1",
+    "revision": "5a7552a2a4d5782845015f18dc3e96826df14506",
+    "license": "Apache-2.0",
+    "language": "en",
+    "sha256": {
+      "test": "c89a6bffa838edb0f2fc6686bf35da4930944519ac97308b0b6e32298594b5b1",
+      "train": "93169003eaa23d0499dbbe26794514216af22bc1bbee71b7b1e1f23edca5ce79",
+      "validation": "3de64be0dddd0dc8a6a1a1368533cc1efe8a9ec290f87feaa064e4e78a5d22b8"
+    }
+  },
+  "scope": [
+    "Email",
+    "IP address",
+    "Payment card",
+    "Person",
+    "Phone",
+    "Social Security number"
+  ],
+  "mapping": {
+    "email": "Email",
+    "ipv4": "IP address",
+    "ipv6": "IP address",
+    "credit_card_number": "Payment card",
+    "name": "Person",
+    "first_name": "Person",
+    "last_name": "Person",
+    "phone_number": "Phone",
+    "ssn": "Social Security number"
+  },
+  "projection": "all-literal-occurrences-adjacent-person-parts-v1",
+  "source_test_documents": 5000,
+  "documents": 5000,
+  "quarantined": {},
+  "excluded_source_entities": {
+    "employee_id": 1005,
+    "company_name": 185,
+    "date_of_birth": 2331,
+    "medical_record_number": 2658,
+    "date": 1157,
+    "user_name": 338,
+    "street_address": 869,
+    "customer_id": 1033,
+    "coordinate": 85,
+    "time": 106,
+    "vehicle_identifier": 98,
+    "device_identifier": 249,
+    "unique_identifier": 189,
+    "tax_id": 23,
+    "license_plate": 579,
+    "address": 563,
+    "country": 71,
+    "city": 128,
+    "bank_routing_number": 257,
+    "password": 59,
+    "postcode": 104,
+    "api_key": 60,
+    "account_number": 141,
+    "biometric_identifier": 137,
+    "state": 27,
+    "certificate_license_number": 124,
+    "health_plan_beneficiary_number": 41,
+    "date_time": 211,
+    "national_id": 46,
+    "url": 23,
+    "swift_bic": 28,
+    "pin": 2,
+    "cvv": 3
+  },
+  "gold_sha256": "5cd497ea879e3ddfbc97fa209e09e962a10f3ca28c0204f3533e28076602d992",
+  "input_sha256": "8fc18bcb3d4835229a6ab35c38ddecc2773bf4c11002e199bb233511592a64e9",
+  "leakage_check": "NFKC/casefold/whitespace document equality against source train/validation and local smoke corpus; duplicate test documents removed",
+  "limitations": [
+    "No near-duplicate/template or pretrained-model contamination guarantee",
+    "Source provides values, not offsets: projected spans are not independently human-adjudicated",
+    "Clean means no gold entities in the declared comparison scope, not free of every PII type"
+  ]
+}

@@ -27,6 +27,22 @@ Download hashes are pinned in `scripts/Get-Assets.ps1`. Per-file distribution ha
 
 The synthetic corpus contains malformed/encrypted test data and an Apache Tika OneNote fixture. See `tests/fixtures/README.md` for its source.
 
+## Optional accuracy benchmark dependencies
+
+The independent benchmark in `tools/accuracy` installs its Python tools and external dataset into an ignored local environment. These are not application runtime dependencies. Its hash-locked dependency graph is in `tools/accuracy/requirements.lock`; preserve the installed distributions' complete notices if redistributing that environment.
+
+| Component | Version | License / notices |
+| --- | --- | --- |
+| Presidio Analyzer | 2.2.362 | MIT; `licenses/accuracy/presidio-LICENSE.txt` |
+| spaCy | 3.8.11 | MIT; `licenses/accuracy/spacy-LICENSE.txt` |
+| spaCy English large model | en_core_web_lg 3.8.0 | MIT and source-data notices; `licenses/accuracy/en-core-web-lg-LICENSE.txt`, `licenses/accuracy/en-core-web-lg-SOURCES.txt` |
+| NumPy | 2.5.3 | BSD and bundled native-library notices; `licenses/accuracy/numpy-LICENSE.txt` |
+| PyArrow | 23.0.1 | Apache-2.0 and bundled-component notices; `licenses/accuracy/pyarrow-LICENSE.txt`, `licenses/accuracy/pyarrow-NOTICE.txt` |
+| Click | 8.3.1 | BSD-3-Clause; `licenses/accuracy/click-LICENSE.txt` |
+| Gretel AI synthetic English PII corpus | revision `5a7552a2a4d5782845015f18dc3e96826df14506` | Apache-2.0, per the pinned [dataset card](https://huggingface.co/datasets/gretelai/gretel-pii-masking-en-v1/blob/5a7552a2a4d5782845015f18dc3e96826df14506/README.md); downloaded separately, no corpus records redistributed |
+| Philter | 3.4.2, external local test image | Apache-2.0 and bundled-component notices; `licenses/accuracy/philter-LICENSE.txt` |
+| Phinder | revision `ab074151c4a4699dd1efff866f8c190af17490ca`, external local test build | Apache-2.0; `licenses/accuracy/phinder-LICENSE.txt`; preserve dependency notices in the separately built jar |
+
 ## macOS local dependencies
 
 The macOS setup uses Homebrew OpenJDK 21 and Tesseract (and their Homebrew-managed native dependencies). These are referenced on the local machine rather than redistributed in the `.app`; their licenses are available in the corresponding Homebrew Cellar installations. `Contents/homebrew-versions.txt` records installed formula versions at build time. Tika, the name model, and tessdata_fast 4.1.0 retain the same SHA-256 pins as the Windows setup; the Mac download manifest is `scripts/assets.json`. The Mac app is a local build, not a signed/notarized portable release.

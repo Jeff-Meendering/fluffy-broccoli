@@ -2,6 +2,8 @@
 
 Reviewed 11 September 2026. This is a useful development checkpoint and a candidate for a controlled professional pilot. It is not yet supported by evidence sufficient to claim best-in-class detection, exhaustive discovery, or forensic-grade reliability.
 
+I02 follow-up: a separate [independent text benchmark](tools/accuracy/RESULTS.md) now measures 5,000 externally authored synthetic documents against PII Explorer, Presidio, and local Philter/Phinder identifier configurations. The original assessment below predates those runs. They do not replace extraction/OCR evaluation, independent human adjudication, or evaluation of the competitors' optional name models.
+
 ## Continue or use Presidio?
 
 Continue if the product you want is a portable, local folder-scanning and evidence-review application for analysts. If your only requirement is a general-purpose PII detection API, start by evaluating Presidio instead of maintaining a competing library from scratch. Keeping this application and reusing a stronger detector are compatible decisions.

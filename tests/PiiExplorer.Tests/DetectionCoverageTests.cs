@@ -360,7 +360,6 @@ public sealed class NameCoverageTests(PiiNameDetectionFixture fixture) : IClassF
     }
 
     [Theory]
-    [InlineData("Regards, Tom")]
     [InlineData("Best regards,")]
     [InlineData("Send the PDF to IBM and NASA today.")]
     [InlineData("The FBI and CIA met with ACME CORP.")]

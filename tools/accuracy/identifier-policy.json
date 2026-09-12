@@ -1,0 +1,9 @@
+{
+  "identifiers": {
+    "creditCard": { "enabled": true, "onlyValidCreditCardNumbers": true, "onlyWordBoundaries": true },
+    "emailAddress": { "enabled": true, "onlyStrictMatches": true, "onlyValidTLDs": false },
+    "ipAddress": { "enabled": true },
+    "phoneNumber": { "enabled": true },
+    "ssn": { "enabled": true }
+  }
+}

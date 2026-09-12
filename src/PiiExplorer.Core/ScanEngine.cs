@@ -10,8 +10,11 @@ using SharpCompress.Readers;
 
 namespace PiiExplorer.Core;
 
-public sealed class ScanEngine(RuntimePaths paths)
+public sealed class ScanEngine(RuntimePaths paths, IEnumerable<IRecognizer>? recognizers = null, IEnumerable<IExtractor>? extractors = null)
 {
+    private readonly IRecognizer[] customRecognizers = (recognizers ?? []).ToArray();
+    private readonly IExtractor[] customExtractors = (extractors ?? []).ToArray();
+
     // Native text reading keeps attribute values, link targets and code that document
     // parsers strip, and avoids the parser round trip on large machine-generated files.
     private static readonly HashSet<string> TextExtensions = new(StringComparer.OrdinalIgnoreCase) {
@@ -34,15 +37,10 @@ public sealed class ScanEngine(RuntimePaths paths)
         token.ThrowIfCancellationRequested();
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(progress);
-        if (options.Workers <= 0) throw new ArgumentOutOfRangeException(nameof(options.Workers));
-        if (options.MaxFileBytes <= 0) throw new ArgumentOutOfRangeException(nameof(options.MaxFileBytes));
-        if (options.MaxFindings <= 0) throw new ArgumentOutOfRangeException(nameof(options.MaxFindings));
-        if (options.MaxIssues <= 0) throw new ArgumentOutOfRangeException(nameof(options.MaxIssues));
-        if (options.FileTimeoutSeconds <= 0 || options.FileTimeoutSeconds > uint.MaxValue / 1000)
-            throw new ArgumentOutOfRangeException(nameof(options.FileTimeoutSeconds));
+        options.Validate();
         root = Path.GetFullPath(root);
         if (!Directory.Exists(root)) throw new DirectoryNotFoundException(root);
-        string[] missing = paths.Missing(options.Names, options.Ocr).ToArray();
+        string[] missing = paths.Missing(options.Names, options.Ocr, parser: false).ToArray();
         if (missing.Length > 0) throw new InvalidOperationException("The application package is incomplete. Missing: " + string.Join(", ", missing.Select(Path.GetFileName)));
         var watch = Stopwatch.StartNew();
         var coverage = new ConcurrentDictionary<string, ConcurrentDictionary<string, CoverageEntry>>();
@@ -161,9 +159,19 @@ public sealed class ScanEngine(RuntimePaths paths)
                             ct.ThrowIfCancellationRequested();
                             // Publish patterns before potentially slow model inference. A timeout
                             // or regex failure must not discard findings already detected.
-                            Publish(patterns.Detect(part.Text, ct).Where(s => options.Names || s.Type != "Person"));
+                            if (options.Patterns) RunRecognizer(patterns, () => patterns.Detect(part.Text, ct).Where(s => options.Names || s.Type != "Person"));
                             ct.ThrowIfCancellationRequested();
-                            if (names is not null && NamesPlausible(part.Location)) Publish(names.Detect(part.Text, ct));
+                            if (names is not null && NamesPlausible(part.Location)) RunRecognizer(names, () => names.Detect(part.Text, ct));
+                            foreach (var recognizer in customRecognizers)
+                                RunRecognizer(recognizer, () => recognizer.Detect(part.Text, ct));
+
+                            void RunRecognizer(IRecognizer recognizer, Func<IEnumerable<EntitySpan>> detect)
+                            {
+                                ct.ThrowIfCancellationRequested();
+                                try { Publish(detect()); }
+                                catch (Exception e) when (!ct.IsCancellationRequested)
+                                { Issue(file, part.Source, $"Recognizer {recognizer.Id} failed: {e.GetType().Name}: {e.Message}", CoverageReason.RecognizerFailure, part.Origin?.ResourceId ?? "root"); }
+                            }
 
                             void Publish(IEnumerable<EntitySpan> spans)
                             {
@@ -174,6 +182,8 @@ public sealed class ScanEngine(RuntimePaths paths)
                                     foreach (var span in spans)
                                     {
                                         if (ct.IsCancellationRequested) break; // Publish already reserved findings before stopping.
+                                        if (string.IsNullOrWhiteSpace(span.Type) || string.IsNullOrWhiteSpace(span.Method) || span.Start < 0 || span.Length <= 0 || span.Start > part.Text.Length - span.Length || !double.IsFinite(span.Confidence) || span.Confidence < 0 || span.Confidence > 1)
+                                            throw new InvalidDataException("Recognizer returned an invalid entity span");
                                         string value = part.Text.Substring(span.Start, span.Length).Trim();
                                         // Only the same span in the same representation is a duplicate.
                                         long start = origin.Start + (long)span.Start * origin.Stride;
@@ -246,7 +256,7 @@ public sealed class ScanEngine(RuntimePaths paths)
             .ThenBy(e => e.ResourceId, StringComparer.Ordinal).ToArray();
         foreach (var outcome in outcomes) progress.Report(new(Outcomes: [outcome]));
         return new(discovered, completed, Math.Min(count, options.MaxFindings), issueCount, watch.Elapsed, token.IsCancellationRequested)
-        { Outcomes = outcomes, StopReason = stop, Configuration = new(options.Ocr, options.Names, true, options.PhoneRegions) };
+        { Outcomes = outcomes, StopReason = stop, Configuration = new(options.Ocr, options.Names, options.Patterns, string.Join(",", patterns.PhoneRegions)) };
     }
 
     private async IAsyncEnumerable<ExtractedPart> ExtractAsync(string file, string source, ScanOptions options,
@@ -281,6 +291,21 @@ public sealed class ScanEngine(RuntimePaths paths)
         ExtractionClient extractor, ArchiveBudget budget, int depth, [EnumeratorCancellation] CancellationToken token, string resourceName, string resourceId)
     {
         token.ThrowIfCancellationRequested();
+        var request = new ExtractionRequest(file, resourceName, source, resourceId, options);
+        foreach (var adapter in customExtractors)
+        {
+            if (!adapter.CanExtract(request)) continue;
+            await foreach (var part in adapter.ExtractAsync(request, token).WithCancellation(token))
+            {
+                if (part.Issue is null && part.Origin is null) throw new InvalidDataException("Extraction part has no evidence origin");
+                if (part.CoverageComplete) throw new InvalidDataException("Extractors must not emit scanner completion markers");
+                if (part.Origin is { } origin && (origin.ResourceId != resourceId && !origin.ResourceId.StartsWith(resourceId + "/", StringComparison.Ordinal)
+                    || string.IsNullOrWhiteSpace(origin.StreamId) || origin.Start < 0 || origin.Stride <= 0))
+                    throw new InvalidDataException("Extractor returned an invalid evidence origin");
+                yield return part;
+            }
+            yield break;
+        }
         string ext = await ArchiveExtensionAsync(file, token) ?? Path.GetExtension(resourceName);
         if (Archives.Contains(ext))
         {

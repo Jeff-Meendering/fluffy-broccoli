@@ -49,8 +49,29 @@ public sealed record ScanIssue(string FilePath, string Source, string Message)
 /// <param name="PhoneRegions">Comma-separated ISO regions for phone numbers written without a country code.</param>
 public sealed record ScanOptions(bool Ocr = true, bool Names = true, int Workers = 2,
     long MaxFileBytes = 100L * 1024 * 1024, int FileTimeoutSeconds = 180, int MaxFindings = 500_000,
-    int MaxIssues = 10_000, string PhoneRegions = "US,GB")
+    int MaxIssues = 10_000, string PhoneRegions = "US,GB", bool Patterns = true)
 {
+    public void Validate()
+    {
+        if (Workers <= 0 || Workers > MaxWorkers) throw new ArgumentOutOfRangeException(nameof(Workers));
+        if (MaxFileBytes <= 0) throw new ArgumentOutOfRangeException(nameof(MaxFileBytes));
+        if (MaxFindings <= 0) throw new ArgumentOutOfRangeException(nameof(MaxFindings));
+        if (MaxIssues <= 0) throw new ArgumentOutOfRangeException(nameof(MaxIssues));
+        if (FileTimeoutSeconds <= 0 || FileTimeoutSeconds > uint.MaxValue / 1000) throw new ArgumentOutOfRangeException(nameof(FileTimeoutSeconds));
+        ValidatePhoneRegions(PhoneRegions);
+    }
+
+    public static string[] ValidatePhoneRegions(string regions)
+    {
+        ArgumentNullException.ThrowIfNull(regions);
+        var values = regions.Split(',', StringSplitOptions.TrimEntries).Select(r => r.ToUpperInvariant()).ToArray();
+        var supported = PhoneNumbers.PhoneNumberUtil.GetInstance().GetSupportedRegions();
+        if (values.Any(r => !supported.Contains(r)))
+            throw new ArgumentException("PhoneRegions must contain comma-separated supported ISO regions; invalid: " +
+                string.Join(", ", values.Where(r => !supported.Contains(r)).Select(r => r.Length == 0 ? "(empty)" : r)), nameof(regions));
+        return values.Distinct().ToArray();
+    }
+
     public const int MaxWorkers = 8;
     /// <summary>A default worker count for this machine: parallel enough to use a workstation, small enough for a laptop.</summary>
     public static int DefaultWorkers => Math.Clamp(Environment.ProcessorCount / 4, 2, 4);
@@ -62,7 +83,7 @@ public sealed record ScanUpdate(string CurrentFile = "", int Discovered = 0, int
 public enum CoverageStatus { Success, Partial, Failed, Excluded, Unchecked }
 public enum CoverageReason { None, ChildIncomplete, ExtractionFailure, Unsupported, UnsupportedRepresentation, Encrypted, Excluded, OcrDisabled,
     OcrIncomplete, NoReadableText, FileSizeLimit, ArchiveDepthLimit, ArchiveMemberLimit, ArchiveSizeLimit,
-    TextLimit, FindingLimit, IssueLimit, Timeout, UserCancellation, SourceChanged, DiscoveryFailure }
+    TextLimit, FindingLimit, IssueLimit, Timeout, UserCancellation, SourceChanged, DiscoveryFailure, RecognizerFailure, MissingDependency }
 public enum ScanStopReason { None, UserCancellation, FindingLimit, IssueLimit }
 public sealed record InputOutcome(string FilePath, string Source, string ResourceId, CoverageStatus Status,
     IReadOnlyList<CoverageReason> Reasons);
@@ -105,9 +126,9 @@ public sealed class RuntimePaths
     public string Java => Path.Combine(Root, "java", "bin", OperatingSystem.IsWindows() ? "java.exe" : "java");
     public string OcrDirectory => Path.Combine(Root, "ocr");
     public string OcrExecutable => Path.Combine(OcrDirectory, OperatingSystem.IsWindows() ? "tesseract.exe" : "tesseract");
-    public IEnumerable<string> Missing(bool names, bool ocr)
+    public IEnumerable<string> Missing(bool names, bool ocr, bool parser = true)
     {
-        foreach (var path in new[] { Java, Path.Combine(Worker, "tika-app.jar"), Path.Combine(Worker, "ExtractionWorker.class") })
+        if (parser) foreach (var path in new[] { Java, Path.Combine(Worker, "tika-app.jar"), Path.Combine(Worker, "ExtractionWorker.class") })
             if (!File.Exists(path)) yield return path;
         if (names) foreach (var path in new[] { Model, Vocab }) if (!File.Exists(path)) yield return path;
         if (ocr && !File.Exists(OcrExecutable)) yield return OcrExecutable;

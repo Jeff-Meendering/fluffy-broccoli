@@ -1,29 +1,19 @@
-bin/
-obj/
-.build-tools/
-assets/
-dist/
-TestResults/
-test-results/
-*.user
-.vs/
-.idea/
-*.suo
-*.dmp
-*.stackdump
+target/
 .DS_Store
-Thumbs.db
 
-# Local cases, exports, credentials and signing material never belong in source.
+# Cases and exports hold personal data and never belong in source control.
+*.rollcall
+*.rollcall-journal
+*.rollcall-wal
+*.rollcall-shm
 cases/
-reports/
 exports/
-.env
-.env.*
-!.env.example
-*.pfx
-*.p12
-*.key
-*.pem
-__pycache__/
-.venv/
+
+# Local leftovers from the archived PII Explorer project (branch archive/pii-explorer-0.5).
+/.build-tools/
+/assets/
+/dist/
+/test-results/
+/legacy/
+/tools/
+/crates/core/

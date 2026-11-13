@@ -1,0 +1,24 @@
+[package]
+name = "rollcall-case"
+description = "Case storage, resumable ingest and notification-list export"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+rollcall-model.workspace = true
+rollcall-extract.workspace = true
+rollcall-detect.workspace = true
+rollcall-link.workspace = true
+anyhow.workspace = true
+rusqlite.workspace = true
+sha2.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true

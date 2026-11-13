@@ -1,0 +1,22 @@
+[package]
+name = "rollcall"
+description = "Breach-response data mining: from stolen files to a notification list"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "rollcall"
+path = "src/main.rs"
+
+[dependencies]
+rollcall-model.workspace = true
+rollcall-case.workspace = true
+anyhow.workspace = true
+clap.workspace = true
+
+[lints]
+workspace = true

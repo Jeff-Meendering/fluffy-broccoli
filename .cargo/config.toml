@@ -1,0 +1,7 @@
+[alias]
+xtask = "run --locked --package xtask --"
+
+# ONNX Runtime's static CoreML objects use Apple's availability helpers. Rust's
+# -nodefaultlibs link mode can omit them from optimized builds without this flag.
+[target.'cfg(target_vendor = "apple")']
+rustflags = ["-C", "link-arg=-fapple-link-rtlib"]

@@ -1,23 +1,40 @@
-# Development and checkpoints
+# Contributing
 
-macOS development: run `scripts/setup-macos.sh`, `scripts/test-macos.sh`, then `scripts/publish-macos.sh` and `scripts/verify-macos.sh`. These native shell scripts support Apple Silicon and Intel, use the same locked NuGet dependencies and pinned model/Tika assets, and produce a local Finder-launchable app. Java 21 and Tesseract remain Homebrew dependencies. See README.md for launch commands and packaging limits. Build and test each architecture on its own host; testing Apple Silicon does not verify Intel.
+PII Explorer is an Apache-2.0 Rust workspace for local, authorized PII discovery. Changes should improve analyst evidence, coverage, accuracy or reproducibility. Keep reports and source data out of commits.
 
-Use Windows x64, PowerShell 7, the .NET SDK 10.0.301 (pinned in `global.json`) and 7-Zip for the verified development path. Downloading build dependencies requires network access; ordinary scans and bundled model inference run locally. Start with the asset preparation commands in README.md, then run `./scripts/Test.ps1`. This checks locked restores (including the benchmark project), audits NuGet dependencies, builds, and runs the Release tests. Treat reported audit failures as actionable; the audit does not cover every bundled Java/native dependency.
+## Development
 
-`src/PiiExplorer.Core` contains extraction, detection, evaluation and reporting. `src/PiiExplorer.App` contains the Avalonia UI and diagnostic commands. `worker/ExtractionWorker.java` bridges Apache Tika; rebuild it after changing Java code. `tests/PiiExplorer.Tests` contains unit, integration and headless UI tests. `tools/PiiExplorer.Benchmarks` measures synthetic workloads. Run benchmarks without concurrent tests/builds and record hardware, options, repeated timings, findings and attention counts.
+Read [build instructions](docs/BUILD.md), then run:
 
-Every scanner-produced `Finding` carries an `EvidenceLocation`. Its `Origin` identifies the resource, representation and stream, with a chunk start and coordinate unit; the finding's `Start`, `Length` and `ContextStart` are absolute within that stream. `DetectorStart` and `DetectorLength` preserve the detector's UTF-16 chunk span before display trimming. `ExtractedPart.Origin` and the Java segment's `origin` object are required for successful extraction. Rebuild the worker with the client when changing this protocol; an older worker without provenance is rejected. Legacy manually constructed findings may omit evidence and retain their display labels. Occurrence identity excludes the displayed value and detector method, so detectors or overlapping chunks reporting an identical typed span emit one finding. Raw markup and parsed text have separate streams until a verified mapping exists between them.
+```sh
+cargo xtask assets
+cargo xtask test
+```
 
-A PDF report treats a detected value as evidence: it removes only unambiguous host paths (file URIs, drive letters, UNC shares and the scan root, profile or temp folders) from a value, so slash-initial identifiers, URLs and credentials survive. Host-derived text (locations, context, parser errors and member names) also hides bare slash-initial tokens, and a path match ends at the path so the failure reason beside it is preserved. Keep both properties when changing report rendering: do not let path removal replace reported evidence, and do not let a value reintroduce a host path.
+For the optional Python scorer checks, prepare the locked environment in [tools/accuracy](tools/accuracy/README.md) before running its unittest command.
 
-Add positive, negative, malformed and boundary cases for detection changes. A checksum or a high heuristic score does not establish that an identifier is real. Keep original evidence and offsets; report extraction failures and limits. Do not tune against a held-out comparison corpus. Use synthetic reproductions in issues and test files; keep analyst case data and exported findings outside the repository.
+Use synthetic fixtures only. Put local cases and reports in ignored directories. Run `git diff --check` before submitting. Do not include working secrets or personal records in issues, test snapshots, screenshots or PRs. Follow [SECURITY.md](SECURITY.md) for vulnerabilities.
 
-The independent text benchmark lives in [tools/accuracy](tools/accuracy/README.md). It pins an external test split, isolates prediction from gold labels, checks leakage and input integrity, and reports exact-span errors with document-bootstrap intervals. Run its fast scorer tests separately from the expensive detector comparison; the `accuracy-scorer` workflow runs only those contracts. Preserve the frozen mapping and regression budgets. Use development data for tuning and independent reviewers for annotation audits; aggregate baseline results are not evidence that an entity rule is correct.
+## Workspace
 
-The Windows GitHub workflow prepares pinned assets, runs the tests, and smoke-tests the portable package. It has read-only repository permissions and does not publish a release. Its first hosted run must pass before treating hosted CI as verified. Native window rendering and Windows Sandbox behavior still require interactive testing.
+- `crates/core`: detection, extraction, provenance, source verification, saved-scan import, evaluation and reports.
+- `crates/cli`: pipeline/assessment interface and saved-scan review commands.
+- `crates/app`: native egui folder scanning and evidence review.
+- `crates/xtask`: pinned asset verification, repeatable checks and local package staging.
+- `tests/fixtures`: frozen synthetic regression and adversarial extraction inputs.
+- `tools/accuracy`: independent text benchmark and scorer contracts; optional Python tooling, not an application dependency.
+- `legacy/dotnet`: historical source/tests for migration reference; not an active implementation.
 
-Before saving a checkpoint, run `git status --short` and `git add --dry-run .` and review the proposed file list. Build assets, archives, local case/report directories, and test output are ignored. Only the explicitly documented synthetic fixtures belong under `tests/fixtures`; `.gitignore` cannot identify real PII in an arbitrarily named file. Keep the lock files and third-party notices. Use `scripts/Publish.ps1`, `scripts/Test-WindowsPackage.ps1`, and `scripts/Make-Archives.ps1 -Runtime win-x64` for a tested package; a Git source checkout does not contain downloaded runtimes.
+## Changes to detection and extraction
 
-## License and contribution terms
+Preserve exact occurrence coordinates, separate decoded/synthesized/OCR/metadata streams, and root-container provenance. Do not merge repeated occurrences simply because values are equal. Keep filename and embedded-content coverage visible. Unsupported, malformed, encrypted or truncated content must produce attention rather than a clean result.
 
-PII Explorer is licensed under the [Apache License 2.0](LICENSE); see [NOTICE](NOTICE) for attribution. By submitting a contribution you certify that you may do so and you license it to the project under those same terms, including the patent grant in section 3. Add or update a third-party component only with its license text under `licenses` and an entry in `THIRD-PARTY-NOTICES.md`; those notices describe their respective components, not a license grant for this application. Report vulnerabilities privately through [SECURITY.md](SECURITY.md), never in a public issue.
+Include a positive example and a meaningful negative or adversarial example for detector changes. Check Unicode, boundaries and label context. Preserve existing gold labels unless independent review establishes a label error. A checksum proves format consistency, not issuance. Scores are heuristics; do not present them as calibrated identity probabilities.
+
+Keep archive expansion, extracted text, image dimensions, regex configuration and subprocess output bounded. Cancellation/deadlines must not discard earlier findings or block the UI. An in-process parser cannot be forcibly stopped by a cooperative timeout; do not describe this as a sandbox.
+
+## Measuring improvements
+
+Run the 57-case smoke corpus as a regression check and the held-out text benchmark when changing coverage or models. Record versions, settings, asset hashes, extraction settings and environment. Text-only benchmarks do not validate OCR or document extraction. Report per-type precision/recall and clean-document false positives rather than a single marketing score. Historical .NET baselines cannot be attributed to the Rust engine.
+
+Dependency updates must update `Cargo.lock` and preserve license notices. Packages include a generated dependency inventory; maintainers still need to review native components and nested third-party assets. CI should pass on all supported platforms before tagging a release. Signing, notarization and clean-machine validation are release work, not effects of `cargo xtask package`.

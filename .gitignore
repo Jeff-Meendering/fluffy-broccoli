@@ -1,5 +1,6 @@
 bin/
 obj/
+target/
 .build-tools/
 assets/
 dist/
@@ -27,3 +28,4 @@ exports/
 *.pem
 __pycache__/
 .venv/
+*.piicase*

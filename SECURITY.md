@@ -2,9 +2,9 @@
 
 ## Supported versions
 
-Only the most recent pilot build receives fixes. 0.3.0 is the current version;
+Only the most recent pilot build receives fixes. 0.5.0 is the current Rust development version;
 earlier builds are unsupported. Verify the version in the application window or
-in the packaged `README.md` before reporting.
+with `pii-explorer --version` or in the packaged `README.md` before reporting.
 
 ## Reporting a vulnerability
 
@@ -33,7 +33,7 @@ Reportable issues include, for example:
 - Sensitive data left in temporary directories, logs, exports or crash dumps.
 - Findings or report exports that expose more personal data than the UI
   indicates, or privacy controls that can be bypassed.
-- Dependency vulnerabilities in the pinned NuGet, Java, OCR or model assets.
+- Dependency vulnerabilities in the locked Rust dependencies, native ONNX/OCR runtimes or pinned model assets.
 
 Not reportable here: detection misses, false positives or accuracy limits.
 Those are normal engineering work; see `REVIEW.md` and open a normal issue.

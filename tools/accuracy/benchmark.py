@@ -370,7 +370,7 @@ def predict_presidio(inputs, output):
             "networking": "Python socket operations disabled", "suffix_list": "bundled tldextract snapshot; no cache or download"}
 
 
-def run(folder, destination, engines):
+def run(folder, destination, engines, piiexplorer=None, assets=None):
     manifest = verify_corpus(folder)
     destination.mkdir(parents=True, exist_ok=False)
     inputs = read_jsonl(folder / "inputs.jsonl")
@@ -378,8 +378,9 @@ def run(folder, destination, engines):
         prediction_path = destination / (engine + ".predictions.jsonl")
         started = time.perf_counter()
         if engine == "piiexplorer":
-            command = ["dotnet", str(ROOT / "tools/PiiExplorer.Benchmarks/bin/Release/net10.0/PiiExplorer.Benchmarks.dll"),
-                       "--accuracy-predict", str(ROOT / "assets"), str(folder / "inputs.jsonl"), str(prediction_path)]
+            executable = piiexplorer or ROOT / "target/release" / ("pii-explorer.exe" if sys.platform == "win32" else "pii-explorer")
+            command = [str(executable), "predict", str(folder / "inputs.jsonl"), str(prediction_path),
+                       "--assets", str(assets or ROOT / "assets")]
             process = subprocess.run(command, check=True, capture_output=True, text=True, timeout=1800)
             configuration = json.loads(process.stdout.strip().splitlines()[-1])
         else:
@@ -387,11 +388,13 @@ def run(folder, destination, engines):
         seconds = time.perf_counter() - started
         # Only after prediction has finished are the held-out labels loaded.
         report = score_rows(read_jsonl(folder / "gold.jsonl"), read_jsonl(prediction_path))
-        report.update({"schema": 1, "engine": engine, "configuration": configuration, "scope": SCOPE,
+        report.update({"schema": 1, "engine": "piiexplorer-rust" if engine == "piiexplorer" else engine, "configuration": configuration, "scope": SCOPE,
                        "corpus_sha256": manifest["gold_sha256"], "input_sha256": manifest["input_sha256"],
                        "prediction_sha256": digest(prediction_path.read_bytes()), "seconds_including_startup": seconds,
                        "source_commit": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
                        "source_diff_sha256": digest(subprocess.check_output(["git", "diff", "HEAD"], cwd=ROOT, stderr=subprocess.DEVNULL)),
+                       "source_context": "source_commit/diff describe the harness checkout base only, exclude untracked inputs, and do not prove the executable's source. Consult the packaged build-source manifest when available.",
+                       "corpus_purpose": manifest.get("purpose", "frozen public synthetic regression corpus; independent acceptance is not established"),
                        "benchmark_files": {str(p.relative_to(ROOT)).replace("\\", "/"): digest(p.read_bytes())
                                            for p in sorted(HERE.iterdir()) if p.is_file()},
                        "python_packages": {d.metadata["Name"]: d.version for d in importlib.metadata.distributions()},
@@ -438,6 +441,8 @@ def main():
     p = sub.add_parser("prepare"); p.add_argument("destination", type=Path)
     p = sub.add_parser("run"); p.add_argument("corpus", type=Path); p.add_argument("destination", type=Path)
     p.add_argument("--engines", nargs="+", choices=["piiexplorer", "presidio"], default=["piiexplorer", "presidio"])
+    p.add_argument("--piiexplorer", type=Path, help="Explicit frozen Rust CLI executable for reproducible comparisons")
+    p.add_argument("--assets", type=Path, help="Explicit local candidate assets; pins are recorded by the Rust predictor")
     p = sub.add_parser("agreement"); p.add_argument("first", type=Path); p.add_argument("second", type=Path); p.add_argument("output", type=Path)
     p = sub.add_parser("compare"); p.add_argument("baseline", type=Path); p.add_argument("candidate", type=Path)
     p = sub.add_parser("score"); p.add_argument("corpus", type=Path); p.add_argument("predictions", type=Path)
@@ -448,7 +453,7 @@ def main():
     p.add_argument("checkout", type=Path)
     args = parser.parse_args()
     if args.command == "prepare": prepare(args.destination)
-    elif args.command == "run": run(args.corpus, args.destination, args.engines)
+    elif args.command == "run": run(args.corpus, args.destination, args.engines, args.piiexplorer, args.assets)
     elif args.command == "agreement": write_json(args.output, agreement(args.first, args.second))
     elif args.command == "score": imported_report(args.corpus, args.predictions, json.loads(args.configuration.read_text()), args.output)
     elif args.command == "phinder": phinder_run(args.corpus, args.destination, args.checkout)

@@ -1,0 +1,418 @@
+{
+  "documents": 5000,
+  "micro": {
+    "true_positive": 5455,
+    "false_positive": 1568,
+    "false_negative": 2044,
+    "gold_entities": 7499,
+    "precision": 0.7767335896340595,
+    "recall": 0.7274303240432057,
+    "f1": 0.7512739292108525,
+    "false_negative_proportion": 0.27256967595679427,
+    "clean_documents": 990,
+    "false_positives_on_clean_documents": 205,
+    "false_positives_per_clean_document": 0.20707070707070707,
+    "intervals_95": {
+      "precision": {
+        "lower": 0.7644607518528718,
+        "upper": 0.7879554532335462,
+        "defined_resamples": 2000
+      },
+      "recall": {
+        "lower": 0.7176937350453082,
+        "upper": 0.737261829085855,
+        "defined_resamples": 2000
+      },
+      "f1": {
+        "lower": 0.7423698436930407,
+        "upper": 0.7599593415801726,
+        "defined_resamples": 2000
+      },
+      "false_negative_proportion": {
+        "lower": 0.2627381709141449,
+        "upper": 0.2823062649546918,
+        "defined_resamples": 2000
+      },
+      "false_positives_per_clean_document": {
+        "lower": 0.17504775026973435,
+        "upper": 0.2409440019547572,
+        "defined_resamples": 2000
+      }
+    }
+  },
+  "by_type": {
+    "Email": {
+      "true_positive": 1003,
+      "false_positive": 66,
+      "false_negative": 46,
+      "gold_entities": 1049,
+      "precision": 0.9382600561272217,
+      "recall": 0.9561487130600572,
+      "f1": 0.947119924457035,
+      "false_negative_proportion": 0.0438512869399428,
+      "clean_documents": 4106,
+      "false_positives_on_clean_documents": 8,
+      "false_positives_per_clean_document": 0.001948368241597662,
+      "intervals_95": {
+        "precision": {
+          "lower": 0.9215849057728804,
+          "upper": 0.955391832132349,
+          "defined_resamples": 2000
+        },
+        "recall": {
+          "lower": 0.9417932225083541,
+          "upper": 0.9698449533586875,
+          "defined_resamples": 2000
+        },
+        "f1": {
+          "lower": 0.9324424005956022,
+          "upper": 0.9618569874286574,
+          "defined_resamples": 2000
+        },
+        "false_negative_proportion": {
+          "lower": 0.030155046641312553,
+          "upper": 0.05820677749164597,
+          "defined_resamples": 2000
+        },
+        "false_positives_per_clean_document": {
+          "lower": 0.0004855400289496123,
+          "upper": 0.0038807164995486106,
+          "defined_resamples": 2000
+        }
+      }
+    },
+    "IP address": {
+      "true_positive": 709,
+      "false_positive": 27,
+      "false_negative": 253,
+      "gold_entities": 962,
+      "precision": 0.9633152173913043,
+      "recall": 0.737006237006237,
+      "f1": 0.8351001177856302,
+      "false_negative_proportion": 0.262993762993763,
+      "clean_documents": 4244,
+      "false_positives_on_clean_documents": 2,
+      "false_positives_per_clean_document": 0.000471253534401508,
+      "intervals_95": {
+        "precision": {
+          "lower": 0.9407701073528159,
+          "upper": 0.9821693907875185,
+          "defined_resamples": 2000
+        },
+        "recall": {
+          "lower": 0.7092253803376697,
+          "upper": 0.7638947390155268,
+          "defined_resamples": 2000
+        },
+        "f1": {
+          "lower": 0.8154393678423647,
+          "upper": 0.8529057296589835,
+          "defined_resamples": 2000
+        },
+        "false_negative_proportion": {
+          "lower": 0.23610526098447307,
+          "upper": 0.29077461966233026,
+          "defined_resamples": 2000
+        },
+        "false_positives_per_clean_document": {
+          "lower": 0.0,
+          "upper": 0.001183438956876457,
+          "defined_resamples": 2000
+        }
+      }
+    },
+    "Payment card": {
+      "true_positive": 404,
+      "false_positive": 4,
+      "false_negative": 259,
+      "gold_entities": 663,
+      "precision": 0.9901960784313726,
+      "recall": 0.6093514328808446,
+      "f1": 0.7544351073762838,
+      "false_negative_proportion": 0.39064856711915535,
+      "clean_documents": 4429,
+      "false_positives_on_clean_documents": 4,
+      "false_positives_per_clean_document": 0.0009031384059607134,
+      "intervals_95": {
+        "precision": {
+          "lower": 0.9791666666666666,
+          "upper": 0.9977116704805492,
+          "defined_resamples": 2000
+        },
+        "recall": {
+          "lower": 0.5709921273733654,
+          "upper": 0.645459322959323,
+          "defined_resamples": 2000
+        },
+        "f1": {
+          "lower": 0.7241018518518518,
+          "upper": 0.781651311248238,
+          "defined_resamples": 2000
+        },
+        "false_negative_proportion": {
+          "lower": 0.35454067704067704,
+          "upper": 0.4290078726266346,
+          "defined_resamples": 2000
+        },
+        "false_positives_per_clean_document": {
+          "lower": 0.00022436113607840634,
+          "upper": 0.0020197599876684257,
+          "defined_resamples": 2000
+        }
+      }
+    },
+    "Person": {
+      "true_positive": 1837,
+      "false_positive": 1276,
+      "false_negative": 423,
+      "gold_entities": 2260,
+      "precision": 0.5901060070671378,
+      "recall": 0.8128318584070796,
+      "f1": 0.6837893169551461,
+      "false_negative_proportion": 0.18716814159292036,
+      "clean_documents": 3153,
+      "false_positives_on_clean_documents": 610,
+      "false_positives_per_clean_document": 0.19346653980336187,
+      "intervals_95": {
+        "precision": {
+          "lower": 0.5693256549906963,
+          "upper": 0.6105356116801818,
+          "defined_resamples": 2000
+        },
+        "recall": {
+          "lower": 0.7962538534841412,
+          "upper": 0.8283917050691244,
+          "defined_resamples": 2000
+        },
+        "f1": {
+          "lower": 0.6664270438169921,
+          "upper": 0.7004544386087054,
+          "defined_resamples": 2000
+        },
+        "false_negative_proportion": {
+          "lower": 0.17160829493087557,
+          "upper": 0.2037461465158587,
+          "defined_resamples": 2000
+        },
+        "false_positives_per_clean_document": {
+          "lower": 0.17117289746786227,
+          "upper": 0.21717235287589656,
+          "defined_resamples": 2000
+        }
+      }
+    },
+    "Phone": {
+      "true_positive": 489,
+      "false_positive": 169,
+      "false_negative": 415,
+      "gold_entities": 904,
+      "precision": 0.743161094224924,
+      "recall": 0.540929203539823,
+      "f1": 0.6261203585147247,
+      "false_negative_proportion": 0.459070796460177,
+      "clean_documents": 4255,
+      "false_positives_on_clean_documents": 146,
+      "false_positives_per_clean_document": 0.034312573443008226,
+      "intervals_95": {
+        "precision": {
+          "lower": 0.7084438940910274,
+          "upper": 0.7768268022169108,
+          "defined_resamples": 2000
+        },
+        "recall": {
+          "lower": 0.5102740894697464,
+          "upper": 0.5735626035077412,
+          "defined_resamples": 2000
+        },
+        "f1": {
+          "lower": 0.5980890912913298,
+          "upper": 0.6535460342331263,
+          "defined_resamples": 2000
+        },
+        "false_negative_proportion": {
+          "lower": 0.42643739649225876,
+          "upper": 0.48972591053025355,
+          "defined_resamples": 2000
+        },
+        "false_positives_per_clean_document": {
+          "lower": 0.02863782601802183,
+          "upper": 0.040142231632374285,
+          "defined_resamples": 2000
+        }
+      }
+    },
+    "Social Security number": {
+      "true_positive": 1013,
+      "false_positive": 26,
+      "false_negative": 648,
+      "gold_entities": 1661,
+      "precision": 0.9749759384023099,
+      "recall": 0.6098735701384708,
+      "f1": 0.7503703703703704,
+      "false_negative_proportion": 0.3901264298615292,
+      "clean_documents": 3569,
+      "false_positives_on_clean_documents": 20,
+      "false_positives_per_clean_document": 0.005603810591202018,
+      "intervals_95": {
+        "precision": {
+          "lower": 0.9636706826164201,
+          "upper": 0.9850327408793265,
+          "defined_resamples": 2000
+        },
+        "recall": {
+          "lower": 0.5867741046831957,
+          "upper": 0.632213703416149,
+          "defined_resamples": 2000
+        },
+        "f1": {
+          "lower": 0.7323781803212882,
+          "upper": 0.7676335212404328,
+          "defined_resamples": 2000
+        },
+        "false_negative_proportion": {
+          "lower": 0.367786296583851,
+          "upper": 0.4132258953168044,
+          "defined_resamples": 2000
+        },
+        "false_positives_per_clean_document": {
+          "lower": 0.003062148255918204,
+          "upper": 0.008581321324046374,
+          "defined_resamples": 2000
+        }
+      }
+    }
+  },
+  "macro": {
+    "precision": 0.8666690652740451,
+    "precision_defined_types": 6,
+    "recall": 0.7110235025054187,
+    "recall_defined_types": 6,
+    "f1": 0.7661558659098651,
+    "f1_defined_types": 6,
+    "false_negative_proportion": 0.28897649749458126,
+    "false_negative_proportion_defined_types": 6
+  },
+  "excluded_prediction_types": {
+    "Street address": 263,
+    "Date of birth": 1145,
+    "National ID": 222,
+    "Labelled identifier": 483,
+    "Credential": 29,
+    "Crypto wallet": 4,
+    "MAC address": 1
+  },
+  "excluded_gold_types": {},
+  "uncertainty": {
+    "method": "percentile document bootstrap",
+    "samples": 2000,
+    "seed": 20260911,
+    "level": 0.95,
+    "limitations": "Conditional on corpus and projected labels. Related templates can violate independence; zero-error samples give degenerate intervals. Undefined denominators omitted, never scored as perfect."
+  },
+  "schema": 1,
+  "engine": "piiexplorer-rust",
+  "configuration": {
+    "assets": {
+      "model_quantized.onnx": "9419a876387ff2bbe5f21ab7429c7bef93eac86c50353390d4d8fca6e4a210d8",
+      "vocab.txt": "eeaa9875b23b04b4c54ef759d03db9d1ba1554838f8fb26c5d96fa551df93d02"
+    },
+    "cases": 5000,
+    "engine": "PII Explorer Rust",
+    "executableSha256": "3882bd60d37a87280560f048ff19e90cb54c8a2c847293ab8c1613dad54a89fe",
+    "names": true,
+    "networking": "local inference only",
+    "phoneRegions": [
+      "GB",
+      "US"
+    ],
+    "version": "0.4.0"
+  },
+  "scope": [
+    "Email",
+    "IP address",
+    "Payment card",
+    "Person",
+    "Phone",
+    "Social Security number"
+  ],
+  "corpus_sha256": "5cd497ea879e3ddfbc97fa209e09e962a10f3ca28c0204f3533e28076602d992",
+  "input_sha256": "8fc18bcb3d4835229a6ab35c38ddecc2773bf4c11002e199bb233511592a64e9",
+  "prediction_sha256": "040e444ca229ece3cfb4580484f819646a8081549759b7c753e5ffac44bee95b",
+  "seconds_including_startup": 170.2192987910239,
+  "source_commit": "6fc1e9b62ab8ad12ed6bd9c3d33042d36514f4e6",
+  "source_diff_sha256": "e4d846ca7560826a68062af7f2c17fb245b131757c97a5d1cab37325b28a2c25",
+  "benchmark_files": {
+    "tools/accuracy/PhilterAccuracy.java": "f8afe77baaa07b27964911c1873feebe5cbe38135525558943a3c01bb511c189",
+    "tools/accuracy/PhinderAccuracy.java": "d3d637289a0cb40ccfca297549b0ae93fbd3d9526da0665b0306007493814f00",
+    "tools/accuracy/README.md": "54d3e18bba463fb470a42c41dd60a687cb51fc63d891d54448b43a64127c4319",
+    "tools/accuracy/RESULTS.md": "aae5b7c66f4b593d26fe2d6ebcb31c4cca7fd82db3bd606db20e7879aa00bfc9",
+    "tools/accuracy/benchmark.py": "e7a4efe001c063702f355fc2e4030bf99f3f6593dc191f19899135eb58e455b9",
+    "tools/accuracy/dataset.json": "fbe839e9614c080201d6efe1178b0e4d4b59626ccf7b5d9f0ff5085ba0c9cdb2",
+    "tools/accuracy/identifier-policy.json": "666ab8a78c379b6e70d1ac521cb8a298c015a0506ad8a460d0e007c8f8a70300",
+    "tools/accuracy/philter.properties": "0b3a1b9038d0c02f5eb1083b1b7267a9ab843405a115adf55ec940684d95724e",
+    "tools/accuracy/requirements.in": "cb8d6eb8f00f129d88087f002b0105dff8666d2b4545f376d78392a5e90d72e9",
+    "tools/accuracy/requirements.lock": "fed74379f99e91b74428711872c11b7292e44c9fe6c849a111cf5913b10d1dda",
+    "tools/accuracy/scorer-requirements.in": "5c12d85e7c08038d1dd9ffbf8119d12ce808885230a47e2bf65dcd9f114659d5",
+    "tools/accuracy/scorer-requirements.lock": "76659f334ef39b8a2daf365a80b475b0afd127fc1cdc89cf0d4408bbc25bd64b",
+    "tools/accuracy/test_benchmark.py": "3bb3ab03c52c8ef48532e01786cf4867af41c566962136eb4ccdc29017f32aeb"
+  },
+  "python_packages": {
+    "shellingham": "1.5.4",
+    "numpy": "2.5.3",
+    "filelock": "3.32.6",
+    "click": "8.3.1",
+    "spacy": "3.8.11",
+    "thinc": "8.3.11",
+    "packaging": "26.3",
+    "preshed": "3.0.13",
+    "charset-normalizer": "3.5.1",
+    "colorama": "0.4.6",
+    "srsly": "2.5.3",
+    "Pygments": "2.21.0",
+    "requests": "2.34.2",
+    "rich": "15.0.0",
+    "spacy-legacy": "3.0.12",
+    "phonenumbers": "9.0.39",
+    "spacy-loggers": "1.0.5",
+    "pydantic_core": "2.46.5",
+    "catalogue": "2.0.10",
+    "typer-slim": "0.24.0",
+    "confection": "0.1.5",
+    "requests-file": "3.0.1",
+    "en_core_web_lg": "3.8.0",
+    "tqdm": "4.70.1",
+    "pip": "25.0.1",
+    "cymem": "2.0.13",
+    "setuptools": "84.0.0",
+    "pyarrow": "23.0.1",
+    "pydantic": "2.13.5",
+    "mdurl": "0.1.2",
+    "PyYAML": "6.0.3",
+    "blis": "1.3.3",
+    "idna": "3.19",
+    "wasabi": "1.1.3",
+    "certifi": "2026.7.22",
+    "Jinja2": "3.1.6",
+    "annotated-types": "0.8.0",
+    "markdown-it-py": "4.2.0",
+    "annotated-doc": "0.0.5",
+    "MarkupSafe": "3.0.3",
+    "murmurhash": "1.0.15",
+    "typing-inspection": "0.4.4",
+    "smart_open": "7.7.1",
+    "tldextract": "5.3.2",
+    "wrapt": "2.4.1",
+    "urllib3": "2.7.0",
+    "typing_extensions": "4.16.0",
+    "cloudpathlib": "0.25.0",
+    "weasel": "0.4.3",
+    "presidio_analyzer": "2.2.362",
+    "regex": "2026.9.10",
+    "typer": "0.27.2"
+  },
+  "environment": {
+    "python": "3.12.14",
+    "os": "macOS-26.6.2-arm64-arm-64bit"
+  },
+  "matching": "Exact type and UTF-16 span, duplicate predictions counted once. Text only; excludes extraction/OCR."
+}

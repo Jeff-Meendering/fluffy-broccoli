@@ -1,0 +1,16 @@
+[
+  {
+    "name": "engagement-id",
+    "pattern": "ENG-[0-9]{6}",
+    "type": "Labelled identifier",
+    "confidence": 0.8,
+    "whole_word": true
+  },
+  {
+    "name": "employee-id-in-assignment",
+    "pattern": "employee=([A-Z]{2}[0-9]{4})",
+    "type": "Labelled identifier",
+    "confidence": 0.85,
+    "capture_group": 1
+  }
+]

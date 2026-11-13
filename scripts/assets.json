@@ -1,10 +1,5 @@
 [
   {
-    "url": "https://repo.maven.apache.org/maven2/org/apache/tika/tika-app/3.3.2/tika-app-3.3.2.jar",
-    "path": "worker/tika-app.jar",
-    "sha256": "71ca551380e5eab1add99101f4597a8a49a6a18c6143d6874ee9599ca10ae00e"
-  },
-  {
     "url": "https://huggingface.co/onnx-community/distilbert-NER-ONNX/resolve/3a19fe9404a4469d91aa3d551558a97f68872f67/onnx/model_quantized.onnx",
     "path": "models/model_quantized.onnx",
     "sha256": "9419a876387ff2bbe5f21ab7429c7bef93eac86c50353390d4d8fca6e4a210d8"

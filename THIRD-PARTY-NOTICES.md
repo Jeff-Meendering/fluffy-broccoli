@@ -1,48 +1,23 @@
-# Third-party components
+# Third-party components — Rust 0.4.0
 
-PII Explorer's own source is licensed under the Apache License 2.0; see [LICENSE](LICENSE) and [NOTICE](NOTICE). This file covers third-party components only.
+PII Explorer source is Apache-2.0 licensed; see LICENSE and NOTICE. Preserve upstream notices when redistributing dependencies or assets. `Cargo.lock` is the exact Rust dependency inventory; per-crate license expressions and upstream links are recorded by the package task in `licenses/rust/inventory.json`, alongside available license/notice files, top-level READMEs and nested font attribution text from the resolved graph.
 
-PII Explorer uses the components below. Preserve this file, the `LICENSE` and `NOTICE` files, the `licenses` directory, and runtime legal notices when redistributing a package. This inventory is not a claim that every native/transitive dependency has received a complete license or security review.
+This generated inventory includes build/development dependencies and is not a determination of everything linked into a particular executable. Some published crates omit full license texts or contain additional nested assets; review those and native runtime notices before distribution. The inventory does not establish a completed legal/security review.
 
-| Component | Pinned or observed version | Notices / source |
-| --- | --- | --- |
-| .NET | .NET 10; runtime supplied by self-contained publish | [dotnet/runtime](https://github.com/dotnet/runtime); runtime notices in the published output |
-| Avalonia | 12.1.2 | `licenses/nuget`; exact transitive versions and hashes in `packages.lock.json` and `licenses/nuget-packages.json` |
-| ONNX Runtime | 1.29.0 | `licenses/nuget/Microsoft.ML.OnnxRuntime-1.29.0` and managed package notices |
-| SharpCompress | 0.50.4 | `licenses/nuget/SharpCompress-0.50.4` |
-| libphonenumber-csharp | 9.0.39 | `licenses/nuget/libphonenumber-csharp-9.0.39`; Apache-2.0 port of Google libphonenumber, used for phone number validation and country grouping rules |
-| SkiaSharp | 3.119.4 | `licenses/nuget/SkiaSharp-3.119.4` and native asset package notices |
-| Apache Tika | 3.3.2 | `licenses/tika`; [Tika distribution](https://tika.apache.org/download) |
-| Eclipse Temurin / OpenJDK | 21.0.12.1+1 | `assets/java/legal`; [upstream release](https://github.com/adoptium/temurin21-binaries/releases/tag/jdk-21.0.12.1%2B1) |
-| Windows Tesseract OCR | 5.5.3.20260724 | `licenses/tesseract`; [upstream release](https://github.com/tesseract-ocr/tesseract/releases/tag/5.5.3) |
-| OCR language models | tessdata_fast 4.1.0, English and orientation data | [tessdata_fast](https://github.com/tesseract-ocr/tessdata_fast/tree/4.1.0), Apache-2.0 |
-| Person recognition model | onnx-community/distilbert-NER-ONNX, revision `3a19fe9404a4469d91aa3d551558a97f68872f67` | `licenses/model-card.md`; upstream model card and attribution |
-| Noto Sans report font | Bundled font file | `licenses/noto-sans/LICENSE`, SIL Open Font License |
+| Component | Source of version and attribution |
+| --- | --- |
+| Rust libraries, egui/eframe desktop UI, native document/archive parsers, PDF renderer/reporter | Cargo.lock and generated target dependency inventory |
+| ONNX Runtime and ort bindings | Locked `ort`/`ort-sys` versions; downloaded native distribution's own notices must be reviewed with a release |
+| English person model | onnx-community/distilbert-NER-ONNX revision `3a19fe9404a4469d91aa3d551558a97f68872f67`; `licenses/model-card.md` and the pinned upstream model README |
+| Tesseract | Optional system installation, not bundled by `cargo xtask package`; preserve its distribution's licenses if separately bundling it |
+| OCR language data | tessdata_fast 4.1.0 English/orientation data; SHA-256 pins in `scripts/assets.json`, Apache-2.0 upstream data |
+| Noto Sans report font | `crates/core/assets/NotoSans-Regular.ttf`, `crates/core/assets/OFL.txt`, `licenses/noto-sans/LICENSE` |
+| egui built-in fonts | `epaint_default_fonts` license expression in the inventory; includes OFL/Ubuntu font obligations requiring asset-notice review |
 
-The Windows OCR release reports Leptonica 1.87.0, libpng 1.6.58, libjpeg-turbo 3.1.3, libtiff 4.7.2, libwebp 1.6.0, OpenJPEG 2.5.4, and GIFLIB 5.2.2. Native library versions and license obligations must be reviewed together with the OCR distribution before commercial release. Updating Tesseract alone without its DLLs is not sufficient. `scripts/Prepare-WindowsRuntime.ps1` extracts a verified upstream distribution into a fresh runtime directory; it does not install software system-wide.
+The Rust application does not depend on or package .NET, Avalonia, Tika or Java. Their original source/notices are historical reference under `legacy/dotnet` and `docs/history/THIRD-PARTY-NOTICES-0.3.md`.
 
-The Linux package uses the OCR runtime from its Ubuntu build environment. Its versions may differ from Windows. `scripts/prepare-linux.sh` records that environment and package inventory under `licenses/linux`. Rebuild and test Linux independently before distribution; the existing Linux artifact was not refreshed by this Windows review.
+Optional independent benchmark Python dependencies, competitor tools and dataset provenance are separately pinned under `tools/accuracy`; their retained notices are under `licenses/accuracy`. They are not application runtime dependencies. Dataset records and local benchmark environments are not redistributed by the application package.
 
-Download hashes are pinned in `scripts/Get-Assets.ps1`. Per-file distribution hashes are generated by `scripts/Make-Archives.ps1`. Hash manifests detect corruption relative to a trusted manifest; they do not replace a publisher's digital signature.
+The OneNote parser fixture's upstream source is documented in `tests/fixtures/README.md`. Development tests contain only synthetic/example identifiers and public checksum vectors.
 
-The synthetic corpus contains malformed/encrypted test data and an Apache Tika OneNote fixture. See `tests/fixtures/README.md` for its source.
-
-## Optional accuracy benchmark dependencies
-
-The independent benchmark in `tools/accuracy` installs its Python tools and external dataset into an ignored local environment. These are not application runtime dependencies. Its hash-locked dependency graph is in `tools/accuracy/requirements.lock`; preserve the installed distributions' complete notices if redistributing that environment.
-
-| Component | Version | License / notices |
-| --- | --- | --- |
-| Presidio Analyzer | 2.2.362 | MIT; `licenses/accuracy/presidio-LICENSE.txt` |
-| spaCy | 3.8.11 | MIT; `licenses/accuracy/spacy-LICENSE.txt` |
-| spaCy English large model | en_core_web_lg 3.8.0 | MIT and source-data notices; `licenses/accuracy/en-core-web-lg-LICENSE.txt`, `licenses/accuracy/en-core-web-lg-SOURCES.txt` |
-| NumPy | 2.5.3 | BSD and bundled native-library notices; `licenses/accuracy/numpy-LICENSE.txt` |
-| PyArrow | 23.0.1 | Apache-2.0 and bundled-component notices; `licenses/accuracy/pyarrow-LICENSE.txt`, `licenses/accuracy/pyarrow-NOTICE.txt` |
-| Click | 8.3.1 | BSD-3-Clause; `licenses/accuracy/click-LICENSE.txt` |
-| Gretel AI synthetic English PII corpus | revision `5a7552a2a4d5782845015f18dc3e96826df14506` | Apache-2.0, per the pinned [dataset card](https://huggingface.co/datasets/gretelai/gretel-pii-masking-en-v1/blob/5a7552a2a4d5782845015f18dc3e96826df14506/README.md); downloaded separately, no corpus records redistributed |
-| Philter | 3.4.2, external local test image | Apache-2.0 and bundled-component notices; `licenses/accuracy/philter-LICENSE.txt` |
-| Phinder | revision `ab074151c4a4699dd1efff866f8c190af17490ca`, external local test build | Apache-2.0; `licenses/accuracy/phinder-LICENSE.txt`; preserve dependency notices in the separately built jar |
-
-## macOS local dependencies
-
-The macOS setup uses Homebrew OpenJDK 21 and Tesseract (and their Homebrew-managed native dependencies). These are referenced on the local machine rather than redistributed in the `.app`; their licenses are available in the corresponding Homebrew Cellar installations. `Contents/homebrew-versions.txt` records installed formula versions at build time. Tika, the name model, and tessdata_fast 4.1.0 retain the same SHA-256 pins as the Windows setup; the Mac download manifest is `scripts/assets.json`. The Mac app is a local build, not a signed/notarized portable release.
+Checksums detect changes relative to a trusted manifest. They are not publisher signatures. Local packages are unsigned and are not a substitute for release signing, asset review and clean-machine validation.

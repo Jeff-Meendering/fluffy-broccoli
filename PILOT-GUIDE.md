@@ -1,73 +1,41 @@
-# PII Explorer 0.3.0 pilot
+# Analyst guide — Rust 0.5.0
 
-Extract the entire Windows ZIP into a new folder and open **PiiExplorer.exe**. Keep the `assets` and `licenses` directories alongside it. No administrator rights, Office, Java, Python, or .NET installation is needed. Windows x64 only; this release has not been tested on Windows ARM or a clean virtual machine. The executable is not publisher-signed.
+Use PII Explorer on evidence you are authorized to inspect. Keep an original copy and work in an isolated environment for untrusted documents. The tool reads local files; it does not fetch cloud notebooks, decrypt password-protected evidence with supplied credentials, or send findings to an external service.
 
-Choose a controlled test folder, scan it, and review **Needs attention** as carefully as the findings. A completed file count includes files that could only be partially checked. Stopped scans and limits leave incomplete coverage. Names and OCR focus on English; numeric identifiers and addresses have limited country coverage.
+## Choose an interface
 
-## Finding locations
+Use the CLI for repeatable assessments, remote shells, pipelines and retests. [Durable cases](docs/CASES.md) provide resource checkpoints, content/configuration-based reuse, paged queries and persistent review decisions. Save a full, unredacted JSON/JSONL export in controlled storage for comparison or existing report consumers. Create masked presentation exports separately. The native desktop app supports folder scanning, cancellation, search/type filters, source context and JSON/PDF export. It keeps results in memory until export; only its theme preference is saved automatically.
 
-Repeated values at different offsets appear as separate findings. Overlapping extraction chunks collapse only when the resource, text stream, entity type, offset and length match. Filename, metadata, parsed body and raw markup evidence remain separate; counts can therefore include multiple representations of the same source content.
+Start with `pii-explorer scan ./evidence -o ../case.jsonl`. Use `--no-names --no-ocr` for a quick pattern/text pass, then run a full assessment with pinned assets and Tesseract. A quick pass has reduced coverage. Export paths should be outside evidence to prevent results being re-ingested.
 
-Selected findings and PDF reports identify the resource, text stream, representation, zero-based offset and length. Archive resource IDs use entry positions (including directory entries), so members with identical names remain distinguishable. IDs are local to the outer file and stable for unchanged inputs and extraction settings; changing container entries can change their IDs.
+## Review coverage before conclusions
 
-A PDF report reproduces a detected value exactly, including values that begin with `/`, URLs and connection strings; only unambiguous host paths (file URIs, drive letters, UNC shares and the scan root, profile or temp folders) are replaced inside a value. Paths are also omitted from locations, context and attention-item reasons, and a path match stops at the end of the path so the reason or neighbouring text beside it is kept.
+A completed traversal and an empty finding list do not prove a clean dataset. Review every attention item: unsupported files, partial binary recovery, encryption, size/expansion limits, unreadable files, OCR uncertainty, missing models and timeouts all indicate review work. Default dependency/VCS/system exclusions are explicit and can be overridden with `--include-excluded` or extended with `--exclude-dir`.
 
-Text offsets count UTF-16 code units in the identified representation; an emoji can occupy two units. Binary-string offsets and lengths count original bytes. Parsed documents and OCR use extracted-text coordinates, not PDF page positions, image boxes or file byte offsets. Table labels, separators and filename substitutions are explicitly marked as synthesized context. They do not establish an original-source range for redaction. Context retains the extraction text's line breaks. Detailed cell mappings are not yet available.
+Defaults are 100 MiB per root file/member, 400 MiB cumulative archive expansion, 2,000 archive members, four nesting levels, 16 million extracted UTF-16 units per root, 500,000 findings and 10,000 attention items. A root file has a 180-second deadline; individual OCR calls are bounded to 60 seconds. PDF OCR renders every page at 200 DPI, with 40 megapixels per page and 80 megapixels per document. Limits and partial coverage produce attention; global finding/attention caps cancel a regular scan. Durable cases apply the finding cap per root resource.
 
-## Verify the download
+Document parsers run in separate helpers by default, with bounded IPC, deadlines and worker replacement. Unix termination includes the helper process group; Linux also enforces a worker address-space limit. Parent detection remains cooperative. This is not an OS security sandbox, and macOS/Windows resource controls remain incomplete. See [the exact isolation boundaries](docs/ISOLATION.md). Large spreadsheets/PDFs may still require substantial memory even when input bytes fit the file-size limit.
 
-Compare the ZIP's SHA-256 with the `.zip.sha256` file received through a trusted channel. From the extracted folder, run the following with PowerShell:
+## Interpret findings
 
-```powershell
-./Verify-Package.ps1
-```
+Open occurrence context and inspect the detector, source stream, representation, offsets and source hash. Person recognition is English-focused and imperfect. Phone regions affect domestic matching. Many labels and addresses are language-specific. A valid check digit does not establish that an identifier was issued or belongs to a real person. IPs, MACs and wallet addresses are potential identifiers, not always personal data.
 
-The verifier checks every listed file and rejects missing, modified, extra, and linked files. These hashes detect changes; they do not replace publisher signing or authenticate a manifest obtained from an untrusted source. Generate evaluation reports outside the package directory so they do not become unlisted package files.
+The same value can occur in decoded body text, generated table labels, metadata, OCR and filenames. These are separate evidence streams, not distinct people. Byte offsets refer to recovered binary strings; UTF-16 offsets refer to a particular extracted stream. OCR is a best-effort reading of rendered pixels and can miss or misread content.
 
-## Isolated testing of untrusted documents
+`triage` ranks resources and gives exact distinct captured strings by type without printing captured values. This is a review aid, not risk scoring or subject counting. Protected resource names can themselves contain PII.
 
-On a supported Windows installation with Windows Sandbox already enabled:
+## Retest and verify
 
-```powershell
-./New-SandboxConfig.ps1 -PackageFolder "$PWD" -InputFolder 'C:\PII-Test-Data' -OutputFile "$env:TEMP\PII-Pilot.wsb"
-```
+Run a second scan with the same evidence scope, build, models, features and options. `compare baseline.jsonl retest.jsonl` matches exact values per entity/resource/stream and preserves repeated counts while ignoring shifted offsets. Inspect current-only observations. Investigate baseline-only observations against coverage warnings and changed sources; absence is not proof of remediation.
 
-Open the generated `.wsb`, then select **C:\Input** in the app inside Sandbox. The configuration shares only the package and the chosen input directory, both read-only. Networking, clipboard, printer, microphone, camera, and GPU sharing are disabled; protected client mode is requested. It allocates 8 GiB to the guest. Do not map a broad home directory when a small test folder suffices.
+`verify case.jsonl ./evidence` compares the root-file bytes with saved SHA-256 values. Container hashes cover archive members and attachments indirectly. This verifies equality to a saved record, not authenticity, immutable acquisition or chain of custody. Files can change while being scanned; such cases generate attention.
 
-The generator does not install or launch Sandbox. Its XML and path handling are checked, but a live Sandbox guest has not been validated in this review. If Sandbox is unavailable, use an isolated analysis VM configured by your team. The ordinary desktop app's parser processes are **not** an OS security boundary. Reports created inside this configuration disappear when the guest closes because no writable host output directory is shared. For persistent reports, use your team's approved VM export procedure.
+## Exports and storage
 
-Configuration reference: [Microsoft Windows Sandbox settings](https://learn.microsoft.com/en-us/windows/security/application-security/application-isolation/windows-sandbox/windows-sandbox-configure-using-wsb-file).
+JSON/JSONL can be loaded into CLI triage, comparison, verification and PDF reporting. Imports are bounded; a missing stream summary remains incomplete. CSV and SARIF are integration/presentation outputs. CSV neutralizes formula prefixes. PDF reports exclude context by default and can alias resource names. Every export may still disclose sensitive data.
 
-## Measure accuracy on your own cases
+Masking removes captured values/context but keeps resource names and diagnostics. Hashing supports correlation and is vulnerable to guessing on predictable values. Do not publish raw scans, reports, hashes of sensitive identifiers, or screenshots from real assessments. Unix exports start with owner-only file permissions; Windows inherits its destination ACL. Data is not encrypted by the application.
 
-The package includes an offline evaluator and `accuracy-smoke.jsonl`. Run from the extracted folder:
+## Release status
 
-```powershell
-# The pipeline waits for the Windows GUI executable's diagnostic mode to finish.
-./PiiExplorer.exe --evaluate ./accuracy-smoke.jsonl "$env:TEMP\pii-accuracy-new.json" | Out-Null
-Get-Content "$env:TEMP\pii-accuracy-new.json"
-```
-
-Use a new report filename each time. Existing reports are never overwritten. Exit 0 means the evaluation completed, **not** that it passed an accuracy threshold. The smoke corpus contains 57 small, synthetic cases with 38 annotated entities and 19 negative controls. It is a developer-authored regression check, not an independent accuracy benchmark.
-
-Your JSONL corpus must have one case per line:
-
-```json
-{"text":"Contact alice@example.com","entities":[{"type":"Email","start":8,"length":17}]}
-{"text":"No personal information here.","entities":[]}
-```
-
-Annotate every target entity, including duplicates at different locations. Offsets and lengths use **UTF-16 code units**, as .NET does; an emoji can occupy two units. Labels must use the app's exact type names: `Person`, `Email`, `Phone`, `Social Security number`, `Payment card`, `Street address`, `Date of birth`, `IP address`, `MAC address`, `UK National Insurance`, `IBAN`, `National ID`, `Labelled identifier`, `Credential`, or `Crypto wallet`. Existing DOB/labelled-identifier findings include their contextual label in the span. Each text is limited to 100,000 characters, 10,000 annotations, and a 512,000-character JSONL record.
-
-Names are enabled in the command above. Add `--no-names` to disable both pattern-based and model-based Person findings; the bundled corpus then intentionally records its Person annotation as a miss. Gold Person annotations still count as misses if names are disabled. The report includes exact-span precision, recall, and F1 by type and overall; duplicate predictions at the same span count once. Incorrect boundaries count as both a miss and a false positive. Undefined metrics are `null`, not 100%. Reports contain aggregate metrics, settings, engine version, and corpus/model hashes; no input text, source paths, or case IDs are copied. Hashes are fingerprints, not anonymization guarantees.
-
-This evaluator measures detection on supplied text. Independently check document parsing, archive completeness, OCR, and source attribution on files. Include clean negative documents, difficult scans, tables, languages used by your team, and deliberately damaged input. Keep a held-out set that is not used to tune rules or select models. Select precision/recall requirements with your analysts before comparing candidates.
-
-## Useful tester feedback
-
-- Windows version, CPU/RAM, scan settings, total files/bytes, and elapsed time.
-- Whether the app remains responsive while scanning, stopping, filtering, and exporting.
-- False negatives and false positives by PII type, plus incomplete-file messages.
-- A minimal synthetic reproducer for failures when possible. Do not send real PII through ordinary bug reports.
-
-No automatic telemetry or feedback upload is performed by the application. Normal scans retain findings in memory; explicitly exported PDFs contain detected PII. Extractors use temporary files which can remain after a crash. Source length/timestamp changes raise attention items, but this is not cryptographic source verification or forensic chain of custody.
+This is a development rewrite with regression checks, not a forensic certification or an exhaustive detector. See [REVIEW.md](REVIEW.md) for measured validation and known release limits. The earlier .NET implementation's benchmark results are historical and do not describe Rust performance or accuracy.

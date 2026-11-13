@@ -1,0 +1,25 @@
+[package]
+name = "pii-explorer-app"
+description = "Native desktop interface for PII Explorer"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "pii-explorer-app"
+path = "src/main.rs"
+
+[dependencies]
+anyhow.workspace = true
+crossbeam-channel.workspace = true
+eframe.workspace = true
+pii-explorer-core = { path = "../core", features = ["full"] }
+pii-explorer-isolation = { path = "../isolation", features = ["formats", "archives", "ocr"] }
+rfd.workspace = true
+serde_json.workspace = true
+time.workspace = true
+
+[lints]
+workspace = true

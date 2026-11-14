@@ -1,0 +1,30 @@
+[package]
+name = "pii-explorer-isolation"
+description = "Bounded process workers for untrusted document extraction"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[features]
+default = []
+formats = ["pii-explorer-core/formats"]
+archives = ["pii-explorer-core/archives"]
+ocr = ["pii-explorer-core/ocr"]
+
+[dependencies]
+anyhow.workspace = true
+crossbeam-channel.workspace = true
+pii-explorer-core = { path = "../core", default-features = false }
+serde.workspace = true
+serde_json.workspace = true
+
+[target.'cfg(unix)'.dependencies]
+rustix.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true

@@ -1,0 +1,44 @@
+[package]
+name = "pii-explorer-cli"
+description = "Command-line interface for PII Explorer"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+default-run = "pii-explorer"
+
+[[bin]]
+name = "pii-explorer"
+path = "src/main.rs"
+
+[[bin]]
+name = "pii-explorer-worker"
+path = "src/worker.rs"
+
+[features]
+default = ["full"]
+full = ["formats", "archives", "ocr", "ner", "report"]
+formats = ["pii-explorer-core/formats", "pii-explorer-isolation/formats"]
+archives = ["pii-explorer-core/archives", "pii-explorer-isolation/archives"]
+ocr = ["pii-explorer-core/ocr", "pii-explorer-isolation/ocr"]
+ner = ["pii-explorer-core/ner"]
+report = ["pii-explorer-core/report"]
+
+[dependencies]
+anyhow.workspace = true
+clap.workspace = true
+csv.workspace = true
+ctrlc.workspace = true
+percent-encoding.workspace = true
+pii-explorer-core = { path = "../core", default-features = false }
+pii-explorer-case = { path = "../case" }
+pii-explorer-isolation = { path = "../isolation" }
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+tempfile.workspace = true
+time.workspace = true
+
+[lints]
+workspace = true

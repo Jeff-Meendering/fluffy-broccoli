@@ -1,13 +1,9 @@
 PII Explorer
 Copyright 2026 PII Explorer contributors
 
-This product includes software developed by the project contributors and
-distributes third-party components under their own licenses. See
-THIRD-PARTY-NOTICES.md and the licenses directory for the components,
-versions and notices that apply to a distributed package.
+Licensed under the Apache License, Version 2.0. See LICENSE.
 
-This software embeds and redistributes Apache Tika (Apache License 2.0) and
-uses libphonenumber-csharp, an Apache License 2.0 port of Google
-libphonenumber, for phone validation and country grouping rules.
-
-Licensed under the Apache License, Version 2.0. See the LICENSE file.
+This product includes third-party software, fonts, optional model weights and
+OCR language data under their respective licenses. See THIRD-PARTY-NOTICES.md,
+Cargo.lock, the licenses directory and the generated package dependency inventory.
+The historical .NET/Java implementation is not part of the Rust application.

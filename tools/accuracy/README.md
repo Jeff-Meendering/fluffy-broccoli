@@ -1,23 +1,25 @@
 # Independent text accuracy benchmark
 
-This workflow evaluates frozen detectors against independently authored labels. All detector testing runs on this computer; no outside inference requests are permitted. The existing 57-case `--evaluate` corpus remains a development smoke test. Neither corpus evaluates extraction, OCR, file discovery, UI behavior, or real-world prevalence. See [RESULTS.md](RESULTS.md) for the measured baselines and annotation limitations.
+This workflow evaluates frozen detectors against independently authored labels. All detector testing runs on this computer; no outside inference requests are permitted. The existing 57-case `evaluate` corpus remains a development smoke test. Neither corpus evaluates extraction, OCR, file discovery, UI behavior, or real-world prevalence. See [RESULTS.md](RESULTS.md) for the measured baselines and annotation limitations.
+
+Historical reports in `baselines` and `RESULTS.md` describe the earlier .NET engine. New runs use the Rust CLI and must be labelled as a separate engine/build; do not reuse historical results as Rust accuracy claims.
 
 ## Reproduce
 
-Use Python 3.12 and the repository's .NET SDK and pinned assets. From the repository root, in PowerShell:
+Use Python 3.12, the pinned Rust toolchain and pinned assets. From the repository root, in PowerShell:
 
 ```powershell
 py -3.12 -m venv .build-tools/accuracy-venv
 $accuracyPython = '.build-tools/accuracy-venv/Scripts/python.exe'
 & $accuracyPython -m pip install --require-hashes -r tools/accuracy/requirements.lock
-dotnet restore tools/PiiExplorer.Benchmarks --locked-mode
-dotnet build tools/PiiExplorer.Benchmarks -c Release --no-restore
+cargo xtask assets
+cargo build --release --locked -p pii-explorer-cli
 & $accuracyPython -m unittest discover -s tools/accuracy -v
 & $accuracyPython tools/accuracy/benchmark.py prepare .build-tools/accuracy-heldout
 & $accuracyPython tools/accuracy/benchmark.py run .build-tools/accuracy-heldout test-results/accuracy-new
 ```
 
-Preparation downloads approximately 24 MB of dataset Parquet files. Environment installation also downloads the large local spaCy model. These are explicit setup steps, separate from testing. Once prepared, repeat the tests without downloading anything: the PII Explorer adapter invokes the built local DLL; Presidio's Python network operations are blocked and its email validator uses the bundled suffix snapshot without cache or online refresh. The Java competitors run with Docker networking disabled and `--pull never`. No outside requests or hosted inference are used during these runs. Use a **new directory** for each prepare/run; existing files are never overwritten. On POSIX, create the environment with `python3.12` and use `.build-tools/accuracy-venv/bin/python`. Alternatively, `uv venv --python 3.12 .build-tools/accuracy-venv` provisions an isolated Python when it is not installed system-wide. The measured environment is Windows/Python 3.12.14; other platforms have not been verified.
+Preparation downloads approximately 24 MB of dataset Parquet files. Environment installation also downloads the large local spaCy model. These are explicit setup steps, separate from testing. Once prepared, repeat the tests without downloading anything: the PII Explorer adapter invokes the built local Rust CLI; Presidio's Python network operations are blocked and its email validator uses the bundled suffix snapshot without cache or online refresh. The Java competitors run with Docker networking disabled and `--pull never`. No outside requests or hosted inference are used during these runs. Use a **new directory** for each prepare/run; existing files are never overwritten. On POSIX, create the environment with `python3.12` and use `.build-tools/accuracy-venv/bin/python`. Alternatively, `uv venv --python 3.12 .build-tools/accuracy-venv` provisions an isolated Python when it is not installed system-wide. The measured environment is Windows/Python 3.12.14; other platforms have not been verified.
 
 The `run` command requires already-built Release binaries. It runs PII Explorer and Presidio sequentially, then scores their predictions. Use `--engines piiexplorer` or `--engines presidio` for one engine. A failed engine aborts the command; any earlier engine's complete report survives. There is no report for an incomplete engine, and missing predictions are never interpreted as clean documents. Partial output directories must not be used as successful full comparison runs.
 
@@ -58,6 +60,14 @@ This reports symmetric exact-entity agreement F1 and per-type disagreement accou
 
 Do not inspect held-out errors to change recognizers, label mappings, thresholds, or test selection. Develop changes against separate development data; run the frozen benchmark as a release checkpoint. If a label defect requires correction, version the corpus/projection, document the reason independently of engine rankings, and establish a new baseline for **every** engine. Repeated release use eventually makes this a regression corpus; obtain a fresh independent holdout for subsequent generalization claims.
 
+Prepare independent development samples from the already checksum-pinned source train/validation files:
+
+```sh
+.build-tools/accuracy-venv/bin/python tools/accuracy/prepare_development.py .build-tools/accuracy-heldout/source .build-tools/accuracy-development
+```
+
+This creates separate 10,000-document train and 2,000-document validation corpora by stable SHA-256(uid) order, applying the same label projection and exact normalized development deduplication. The script never opens test Parquet or held-out predictions/errors. Validation is checked against the entire source train split, including unsampled documents. These are development sets with synthetic projected labels, suitable for candidate selection and diagnostics. They are not fresh acceptance holdouts or independent human ground truth. Models may already have seen related source templates during upstream training; record that limitation when selecting models.
+
 ## Metrics, uncertainty, and regression gates
 
 Reports include per-type and micro TP/FP/FN, gold support, precision, recall, F1, FN/gold, scope-clean document counts, and FP per scope-clean document. For a per-type metric, clean means no gold of that type; for micro it means no gold of any of the six types. A document may still contain excluded PII. Macro metrics average only defined type metrics and report the number of defined types. Zero denominators produce `null`, never a perfect score.
@@ -67,14 +77,16 @@ Per-type and micro rates have 95% percentile intervals from 2,000 deterministic 
 The initial **prospective engineering budgets**, fixed before inspecting results, are a maximum absolute drop of 0.02 in precision, recall, or F1 for micro and each type with at least 50 gold entities, and a maximum increase of 0.05 FP per clean document with at least 50 clean documents. Unsupported sample sizes are explicitly unassessed. These are change-control budgets, not calibrated statistical significance or product acceptance thresholds. Review the uncertainty intervals and annotate any configuration changes alongside a gate result.
 
 ```powershell
-& $accuracyPython tools/accuracy/benchmark.py compare tools/accuracy/baselines/piiexplorer.report.json test-results/accuracy-new/piiexplorer.report.json
+& $accuracyPython tools/accuracy/benchmark.py compare test-results/accuracy-rust-baseline/piiexplorer.report.json test-results/accuracy-new/piiexplorer.report.json
 ```
+
+Create a fresh Rust baseline in `test-results/accuracy-rust-baseline` before using that comparison. Checked-in .NET baselines intentionally have a different engine identity.
 
 The command fails on budget violations or incompatible engine, corpus, scope, or matching conventions. A passing comparison does not establish sufficient absolute accuracy. Product thresholds and representative independent human-reviewed corpora are still required before making professional accuracy claims. Do not change budgets to make a held-out candidate pass.
 
 ## Competitor contracts
 
-Presidio is pinned to `2.2.362`, spaCy `3.8.11`, `en_core_web_lg` `3.8.0`, English, six requested entities and threshold `0.0`; the complete Python dependency graph and model wheel hashes are locked. This is a documented stock configuration, not a threshold-optimized competitor. PII Explorer uses patterns plus its pinned local name model, default US/GB phone regions, and the evaluator's exact-span union. The comparison does not implement the future scanner evidence-fusion policy in I17. All supported detector spans are scored without confidence trimming or boundary repair.
+Presidio is pinned to `2.2.362`, spaCy `3.8.11`, `en_core_web_lg` `3.8.0`, English, six requested entities and threshold `0.0`; the complete Python dependency graph and model wheel hashes are locked. This is a documented stock configuration, not a threshold-optimized competitor. PII Explorer uses patterns plus its pinned local name model, default US/GB phone regions, and the scanner's occurrence spans. The comparison does not implement the future scanner evidence-fusion policy in I17. All supported detector spans are scored without confidence trimming or boundary repair.
 
 ### Local Philter and Phinder
 

@@ -1,0 +1,61 @@
+name: Rust verification
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rust-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2025, macos-15]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Select pinned Rust toolchain
+        run: rustup toolchain install 1.99.1 --profile minimal --component clippy,rustfmt
+      - name: Verify locked dependency graph
+        run: cargo fetch --locked
+      - name: Install Linux desktop and OCR prerequisites
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libxkbcommon-dev libx11-dev libxi-dev libgl1-mesa-dev tesseract-ocr tesseract-ocr-eng
+      - name: Prepare checksum-pinned model and OCR language data
+        run: cargo xtask assets
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+      - name: Lint all targets and features
+        run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+      - name: Run tests
+        run: cargo test --workspace --all-features --locked
+      - name: Test minimal core build
+        run: cargo test -p pii-explorer-core --no-default-features --locked
+      - name: Test minimal headless CLI and command contracts
+        run: cargo test -p pii-explorer-cli --no-default-features --locked
+      - name: Check document CLI without ONNX or PDF rendering
+        run: cargo check -p pii-explorer-cli --no-default-features --features formats,archives,report --locked
+
+  advisories:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install locked auditor
+        run: cargo install cargo-audit --version 0.22.2 --locked
+      - name: Check RustSec advisories
+        run: cargo audit

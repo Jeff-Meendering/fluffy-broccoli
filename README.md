@@ -1,56 +1,74 @@
 # PII Explorer
 
-Scan folders for personally identifiable information. Open a folder, select findings to see source context, search, filter, or generate PDF reports.
+Local PII and credential discovery for authorized security assessments. Rust 0.5.0 development release, Apache-2.0 licensed.
 
-Professional pilot 0.3.0. Not exhaustive detection. See [PILOT-GUIDE.md](PILOT-GUIDE.md).
+Scan an evidence directory or pipe text into the CLI; review occurrences in the native desktop app; export JSON, JSONL, CSV, SARIF, or PDF. Each finding retains its resource, extracted stream, coordinate system, detector and context. Root files receive SHA-256 hashes so you can verify the bytes later.
 
-## Install
+## Build and run
 
-**macOS:**
-```bash
-./scripts/setup-macos.sh
-./scripts/publish-macos.sh
-open "dist/osx-arm64/PII Explorer.app"
-```
-Use `dist/osx-x64` on Intel.
+Install the toolchain in `rust-toolchain.toml` (Rust 1.99.1). From the checkout:
 
-**Windows:**
-```powershell
-./scripts/Get-Assets.ps1
-./scripts/Build-Worker.ps1
-./scripts/Prepare-WindowsRuntime.ps1
-./scripts/Test.ps1
-./scripts/Publish.ps1 -Runtime win-x64
+```sh
+cargo build --release --locked -p pii-explorer-cli
+./target/release/pii-explorer scan /path/to/evidence --no-names --no-ocr -o /path/to/results.jsonl
 ```
 
-**Linux:**
-```bash
-./scripts/prepare-linux.sh "/path/to/PII Explorer"
+Use `target/release/pii-explorer.exe` on Windows. The output path must be outside the evidence directory for streaming scans. No assets are needed for patterns, labelled names, text, document and archive extraction.
+
+For local model-backed names and OCR, install Tesseract on your system and fetch the checksum-pinned model and English language data:
+
+```sh
+cargo xtask assets
+cargo run --release --locked -p pii-explorer-cli -- scan /path/to/evidence -o /path/to/results.jsonl
+cargo run --release --locked -p pii-explorer-app
 ```
 
-## Develop
+Tesseract is the only external extraction process. The Rust application needs no Java, .NET or Python runtime. Dependency builds and the explicit asset command download files; scanning and inference run locally.
 
-```bash
-dotnet run --project src/PiiExplorer.App -- --assets "$PWD/assets"
+For a smaller server/assessment build that omits ONNX and page rendering:
+
+```sh
+cargo build --release --locked -p pii-explorer-cli --no-default-features --features formats,archives,report
 ```
 
-Needs the [.NET 10.0 SDK](global.json); macOS also needs Homebrew OpenJDK 21 and Tesseract. See [CONTRIBUTING.md](CONTRIBUTING.md).
+See [setup and packaging](docs/BUILD.md) for platform prerequisites and distribution limits.
 
-## Detects
+## Assessment workflow
 
-Person, email, phone, SSN, payment card, street address, date of birth, IP and MAC address, UK National Insurance, IBAN, national IDs, credentials, crypto wallets.
+```sh
+# Save all observations, source hashes and coverage warnings.
+pii-explorer scan ./evidence -o ../assessment.jsonl
 
-Reads text, markdown, CSV/TSV, DOCX/XLSX/PPTX, PDF, OneNote, email, web pages, JPEG/PNG/HEIC and ZIP/RAR/7-Zip archives.
+# Find the resources with the most occurrences, without printing captured values.
+pii-explorer triage ../assessment.jsonl --top 20
 
-## Limits
+# Capture a retest and compare exact values while allowing offsets to move.
+pii-explorer scan ./evidence -o ../retest.jsonl
+pii-explorer compare ../assessment.jsonl ../retest.jsonl --fail-on-new
 
-- Local processing only; OCR and extraction use temporary directories
-- 100 MiB per file (adjustable), 3 minutes per file
-- 500,000 findings and 10,000 attention items
-- Paths relative to the scanned folder, empty PDF metadata
+# Check that evidence still matches the recorded root-file hashes.
+pii-explorer verify ../assessment.jsonl ./evidence
 
-## License
+# Generate a new report without reopening the evidence files.
+pii-explorer report ../assessment.jsonl ../report.pdf --hide-file-names
+```
 
-[Apache License 2.0](LICENSE) — see [NOTICE](NOTICE). Report vulnerabilities privately as described in [SECURITY.md](SECURITY.md).
+The CLI is the primary interface for repeatable assessments and pipelines. [Durable cases](docs/CASES.md) add resumable checkpoints, unchanged-source caching, paged findings and persistent review decisions. The desktop app provides interactive folder scanning, filtering, evidence context and export. Default filesystem scans use a separate [extraction helper](docs/ISOLATION.md). The shared core is usable as a Rust library. See the [command reference](docs/CLI.md), [analyst guide](PILOT-GUIDE.md), and [example custom rules](rules.example.json).
 
-[PILOT-GUIDE](PILOT-GUIDE.md) · [REVIEW](REVIEW.md) · [CONTRIBUTING](CONTRIBUTING.md) · [THIRD-PARTY-NOTICES](THIRD-PARTY-NOTICES.md)
+## Coverage
+
+Detects person names, email, phone, SSN, payment cards, street addresses, dates of birth, IP/MAC addresses, UK National Insurance, IBAN, selected national IDs, labelled identifiers, credentials and crypto wallets. Checksums and country-aware validation reduce noise; scores are heuristics, not calibrated probabilities.
+
+Extracts text/encodings, CSV/TSV, HTML/XML, Office Open XML, XLS/XLSB/ODS, ODT/ODP/EPUB, PDF text/forms/metadata, OneNote sections, MIME email and attachments, images and nested ZIP/RAR/7z/TAR/GZIP/BZIP2/XZ archives. With OCR enabled, PDF pages are rendered in Rust and passed to local Tesseract, including pages with both text and images. Unsupported binaries receive a bounded strings view and an attention item.
+
+## Limits and trust
+
+Detection is not exhaustive. An empty finding list does not establish absence of PII. Always review attention items, interrupted scans and skipped formats. Extraction runs in separate helper processes by default, with bounded IPC and enforced deadlines. These controls are not an OS sandbox; platform resource limits vary. Use an isolated analysis environment for hostile documents.
+
+Exports can contain PII, credentials and identifying filenames. `--redact mask` removes captured values and context, but retains resource names and diagnostics. Hashes permit correlation and do not anonymize predictable identifiers. Keep cases and exports outside source control.
+
+The [Rust validation record](REVIEW.md) distinguishes regression evidence from independent accuracy claims. Historical .NET/Java source is isolated in [legacy/dotnet](legacy/dotnet/README.md) and is not used by Cargo or current CI.
+
+## Contributing and license
+
+[Contributing](CONTRIBUTING.md) · [Security reporting](SECURITY.md) · [Third-party notices](THIRD-PARTY-NOTICES.md) · [Apache-2.0 license](LICENSE)

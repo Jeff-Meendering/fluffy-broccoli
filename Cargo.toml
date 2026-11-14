@@ -4,6 +4,7 @@ members = [
     "crates/extract",
     "crates/detect",
     "crates/link",
+    "crates/resolve",
     "crates/case",
     "crates/cli",
     "crates/xtask",
@@ -23,6 +24,7 @@ rollcall-model = { path = "crates/model" }
 rollcall-extract = { path = "crates/extract" }
 rollcall-detect = { path = "crates/detect" }
 rollcall-link = { path = "crates/link" }
+rollcall-resolve = { path = "crates/resolve" }
 rollcall-case = { path = "crates/case" }
 
 anyhow = "1.0.100"

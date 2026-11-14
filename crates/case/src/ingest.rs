@@ -12,7 +12,7 @@ use rollcall_model::{CoverageGap, GapKind, PersonRecord};
 use rusqlite::{OptionalExtension, Transaction, params};
 use sha2::{Digest, Sha256};
 
-use crate::store::{Case, ENGINE};
+use crate::store::{Case, ENGINE, sha256_hex};
 
 #[derive(Debug, Clone, Copy)]
 pub struct IngestOptions {
@@ -49,6 +49,10 @@ pub struct IngestSummary {
     pub total_records: u64,
     /// Coverage gaps in the case after this run.
     pub total_gaps: u64,
+    /// People in the case after this run, once records were resolved.
+    pub persons: u64,
+    /// Pairs of records that may be one person and await a reviewer.
+    pub suggestions: u64,
 }
 
 enum Found {
@@ -118,9 +122,28 @@ pub fn ingest(case: &mut Case, root: &Path, options: &IngestOptions) -> Result<I
         params![run],
     )?)
     .unwrap_or(0);
+    let resolved = case.resolve()?;
     let counts = case.counts()?;
     summary.total_records = counts.records;
     summary.total_gaps = counts.gaps;
+    summary.persons = resolved.persons;
+    summary.suggestions = resolved.suggestions;
+    case.append_audit(
+        "ingest",
+        &format!(
+            "Run {run}: {} files found, {} read, {} unchanged, {} not read, {} no longer present. \
+             Case now holds {} records, {} persons, {} open suggestions, {} coverage gaps. Engine: {ENGINE}.",
+            summary.discovered,
+            summary.read,
+            summary.reused,
+            summary.not_read,
+            summary.missing,
+            summary.total_records,
+            summary.persons,
+            summary.suggestions,
+            summary.total_gaps,
+        ),
+    )?;
     Ok(summary)
 }
 
@@ -138,6 +161,7 @@ fn ingest_file(
         Content::TooLarge { sha256, bytes } => (Some(sha256.as_str()), *bytes),
         Content::Failed(_) => (None, 0),
     };
+    let file_hash = sha256.unwrap_or_default().to_owned();
 
     let existing: Option<(i64, Option<String>, String)> = transaction
         .query_row(
@@ -221,7 +245,7 @@ fn ingest_file(
             continue;
         }
         for record in link_table(table, &schema) {
-            insert_record(transaction, document, &record)?;
+            insert_record(transaction, document, logical, &file_hash, &record)?;
             summary.new_records += 1;
         }
     }
@@ -231,13 +255,31 @@ fn ingest_file(
 fn insert_record(
     transaction: &Transaction<'_>,
     document: i64,
+    logical: &str,
+    file_hash: &str,
     record: &PersonRecord,
 ) -> Result<()> {
+    let fingerprint = sha256_hex(
+        format!(
+            "{logical}\n{file_hash}\n{}\n{}\n{}",
+            record.scope.as_deref().unwrap_or_default(),
+            record.row,
+            record.relation.as_deref().unwrap_or_default()
+        )
+        .as_bytes(),
+    );
     transaction
         .prepare_cached(
-            "INSERT INTO records(document_id, scope, row, relation) VALUES(?1, ?2, ?3, ?4)",
+            "INSERT INTO records(document_id, scope, row, relation, fingerprint)
+             VALUES(?1, ?2, ?3, ?4, ?5)",
         )?
-        .execute(params![document, record.scope, record.row, record.relation])?;
+        .execute(params![
+            document,
+            record.scope,
+            record.row,
+            record.relation,
+            fingerprint
+        ])?;
     let id = transaction.last_insert_rowid();
     let mut statement = transaction.prepare_cached(
         "INSERT INTO observations(record_id, kind, raw, normalized, valid, col, header, method)

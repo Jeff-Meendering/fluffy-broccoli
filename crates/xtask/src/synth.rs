@@ -42,6 +42,12 @@ pub struct TruthPerson {
     pub files: BTreeSet<String>,
     /// Canonical value of every element exposed for this person, keyed by element.
     pub exposed: BTreeMap<String, String>,
+    /// Other ways the name is written somewhere: a short form, a typing error.
+    #[serde(default)]
+    pub aliases: BTreeSet<String>,
+    /// What each file says about the person, exactly as a correct reading gives it.
+    #[serde(default)]
+    pub appearances: BTreeMap<String, BTreeMap<String, String>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -81,10 +87,46 @@ impl Random {
 }
 
 const FIRST_NAMES: [&str; 40] = [
-    "Ada", "Amara", "Andre", "Beatriz", "Carlos", "Chen", "Dalia", "Daniel", "Elena", "Emeka",
-    "Fatima", "Felix", "Grace", "Hana", "Hugo", "Imani", "Ivan", "Jamal", "Joan", "Kenji", "Lena",
-    "Liam", "Maria", "Mateo", "Nadia", "Noah", "Olga", "Omar", "Priya", "Quinn", "Rosa", "Samir",
-    "Sofia", "Tariq", "Uma", "Victor", "Wei", "Ximena", "Yusuf", "Zoe",
+    "Ada",
+    "Amara",
+    "Robert",
+    "Beatriz",
+    "Carlos",
+    "William",
+    "Elizabeth",
+    "Daniel",
+    "Elena",
+    "Emeka",
+    "Fatima",
+    "Katherine",
+    "Grace",
+    "Hana",
+    "Michael",
+    "Imani",
+    "James",
+    "Jamal",
+    "Samuel",
+    "Kenji",
+    "Thomas",
+    "Liam",
+    "Maria",
+    "Mateo",
+    "Nadia",
+    "Noah",
+    "Olga",
+    "Omar",
+    "Priya",
+    "Quinn",
+    "Rosa",
+    "Samir",
+    "Sofia",
+    "Tariq",
+    "Uma",
+    "Victor",
+    "Wei",
+    "Ximena",
+    "Yusuf",
+    "Zoe",
 ];
 const LAST_NAMES: [&str; 40] = [
     "Abbott",
@@ -217,6 +259,43 @@ fn days_from_civil(year: i64, month: u32, day: u32) -> i64 {
     era * 146_097 + day_of_era - 719_468
 }
 
+/// The short form a given name is often written in, for the names that have one.
+fn short_form(first: &str) -> Option<&'static str> {
+    Some(match first {
+        "Robert" => "Bob",
+        "William" => "Bill",
+        "Elizabeth" => "Liz",
+        "Katherine" => "Kate",
+        "Michael" => "Mike",
+        "James" => "Jim",
+        "Samuel" => "Sam",
+        "Thomas" => "Tom",
+        "Daniel" => "Dan",
+        _ => return None,
+    })
+}
+
+/// A surname with its third and fourth letters swapped, as a slip of the fingers.
+fn mistyped(last: &str) -> Option<String> {
+    let mut letters: Vec<char> = last.chars().collect();
+    (letters.len() >= 5 && letters[2] != letters[3]).then(|| {
+        letters.swap(2, 3);
+        letters.into_iter().collect()
+    })
+}
+
+/// True for people who share their full name with the person generated just before
+/// them, though they are someone else.
+fn is_namesake(index: usize) -> bool {
+    index % 18 == 9
+}
+
+/// True for people who live with the person generated just before them, and so share
+/// a phone number and an address.
+fn is_housemate(index: usize) -> bool {
+    index % 11 == 4 && !is_namesake(index)
+}
+
 fn population(random: &mut Random, primaries: usize) -> Vec<Person> {
     let mut people: Vec<Person> = Vec::new();
     let mut names = BTreeSet::new();
@@ -242,13 +321,22 @@ fn population(random: &mut Random, primaries: usize) -> Vec<Person> {
                 break ssn;
             }
         };
+        let phone = loop {
+            let phone = format!(
+                "{}{}{}",
+                random.pick(&AREA_CODES),
+                random.between(200, 999),
+                random.digits(4)
+            );
+            if numbers.insert(phone.clone()) {
+                break phone;
+            }
+        };
         let card_body = format!("4{}", random.digits(14));
         let routing_body = format!("{:02}{}", random.between(1, 12), random.digits(6));
         Person {
             email: format!(
-                "{}.{}{index}@example.{}",
-                first,
-                last,
+                "{first}.{last}{index}@example.{}",
                 random.pick(&["com", "org", "net"])
             )
             .to_lowercase(),
@@ -260,7 +348,7 @@ fn population(random: &mut Random, primaries: usize) -> Vec<Person> {
                 random.between(1, 12) as u32,
                 random.between(1, 28) as u32,
             ),
-            phone: format!("{}55501{}", random.pick(&AREA_CODES), random.digits(2)),
+            phone,
             street: format!(
                 "{} {} {}",
                 random.between(1, 9999),
@@ -276,7 +364,24 @@ fn population(random: &mut Random, primaries: usize) -> Vec<Person> {
         }
     };
     for index in 0..primaries {
-        let person = make(random, index, None);
+        let mut person = make(random, index, None);
+        if let Some(previous) = people.last() {
+            if is_namesake(index) {
+                // A stranger with the same name: nothing else may coincide.
+                person.first = previous.first.clone();
+                person.last = previous.last.clone();
+                if person.birth == previous.birth {
+                    person.birth.0 -= 1;
+                }
+                if person.street == previous.street {
+                    person.street = format!("{} Unity Way", 10_000 + index);
+                }
+            } else if is_housemate(index) {
+                person.phone = previous.phone.clone();
+                person.street = previous.street.clone();
+                person.place = previous.place;
+            }
+        }
         people.push(person);
     }
     // Every fifth person has a spouse who appears only as extra columns on their row.
@@ -298,10 +403,22 @@ impl Dataset {
     fn expose(&mut self, person: usize, file: &str, elements: &[(ElementKind, String)]) {
         let entry = &mut self.truth[person];
         entry.files.insert(file.to_owned());
+        let appearance = entry.appearances.entry(file.to_owned()).or_default();
         for (kind, value) in elements {
-            entry
-                .exposed
-                .insert(kind.as_str().to_owned(), value.clone());
+            appearance.insert(kind.as_str().to_owned(), value.clone());
+            if *kind == ElementKind::Name {
+                // However it is written here, the person has one canonical name.
+                entry
+                    .exposed
+                    .insert(kind.as_str().to_owned(), entry.name.clone());
+                if *value != entry.name {
+                    entry.aliases.insert(value.clone());
+                }
+            } else {
+                entry
+                    .exposed
+                    .insert(kind.as_str().to_owned(), value.clone());
+            }
         }
     }
 }
@@ -334,6 +451,8 @@ pub fn generate(seed: u64, primaries: usize, out: &Path) -> Result<Truth> {
                 name: person.name(),
                 files: BTreeSet::new(),
                 exposed: BTreeMap::new(),
+                aliases: BTreeSet::new(),
+                appearances: BTreeMap::new(),
             })
             .collect(),
     };
@@ -417,8 +536,15 @@ pub fn generate(seed: u64, primaries: usize, out: &Path) -> Result<Truth> {
     ])];
     for index in members(1) {
         let person = &people[index];
+        // Now and then a surname is keyed in wrongly.
+        let slip = if index % 17 == 3 {
+            mistyped(&person.last)
+        } else {
+            None
+        };
+        let last = slip.unwrap_or_else(|| person.last.clone());
         rows.push(vec![
-            format!("{}, {}", person.last, person.first),
+            format!("{last}, {}", person.first),
             person.ssn.clone(),
             person.routing.clone(),
             person.account.clone(),
@@ -427,7 +553,7 @@ pub fn generate(seed: u64, primaries: usize, out: &Path) -> Result<Truth> {
             index,
             path,
             &[
-                (Kind::Name, person.name()),
+                (Kind::Name, format!("{} {last}", person.first)),
                 (Kind::Ssn, person.ssn_dashed()),
                 (Kind::RoutingNumber, person.routing.clone()),
                 (Kind::BankAccount, person.account.clone()),
@@ -530,8 +656,13 @@ pub fn generate(seed: u64, primaries: usize, out: &Path) -> Result<Truth> {
         let (area, exchange, line) = person.phone_parts();
         let mut email = person.email.clone();
         email[..1].make_ascii_uppercase();
+        // Customer systems often hold the name a person goes by.
+        let written = match short_form(&person.first) {
+            Some(short) if index % 2 == 0 => format!("{short} {}", person.last),
+            _ => person.name(),
+        };
         rows.push(vec![
-            person.name(),
+            written.clone(),
             email,
             format!("+1 {area}-{exchange}-{line}"),
             format!(
@@ -550,7 +681,7 @@ pub fn generate(seed: u64, primaries: usize, out: &Path) -> Result<Truth> {
             index,
             path,
             &[
-                (Kind::Name, person.name()),
+                (Kind::Name, written),
                 (Kind::Email, person.email.clone()),
                 (Kind::Phone, format!("+1{}", person.phone)),
                 (Kind::PaymentCard, person.card.clone()),

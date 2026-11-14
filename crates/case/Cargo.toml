@@ -13,11 +13,13 @@ rollcall-model.workspace = true
 rollcall-extract.workspace = true
 rollcall-detect.workspace = true
 rollcall-link.workspace = true
+rollcall-resolve.workspace = true
 anyhow.workspace = true
 rusqlite.workspace = true
 sha2.workspace = true
 
 [dev-dependencies]
+rusqlite.workspace = true
 tempfile.workspace = true
 
 [lints]

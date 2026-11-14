@@ -441,6 +441,7 @@ dependencies = [
  "rollcall-extract",
  "rollcall-link",
  "rollcall-model",
+ "rollcall-resolve",
  "rusqlite",
  "sha2",
  "tempfile",
@@ -474,6 +475,13 @@ name = "rollcall-model"
 version = "0.1.0"
 dependencies = [
  "serde",
+]
+
+[[package]]
+name = "rollcall-resolve"
+version = "0.1.0"
+dependencies = [
+ "rollcall-model",
 ]
 
 [[package]]

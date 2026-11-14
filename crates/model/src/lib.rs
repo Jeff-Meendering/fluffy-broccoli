@@ -82,6 +82,30 @@ impl ElementKind {
         Self::ALL.into_iter().find(|kind| kind.as_str() == value)
     }
 
+    /// The element as named in a sentence: "same SSN", "same email address".
+    #[must_use]
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Name => "name",
+            Self::Ssn => "SSN",
+            Self::DateOfBirth => "date of birth",
+            Self::Email => "email address",
+            Self::Phone => "phone number",
+            Self::Address => "address",
+            Self::City => "city",
+            Self::State => "state",
+            Self::PostalCode => "postal code",
+            Self::Country => "country",
+            Self::PaymentCard => "payment card number",
+            Self::BankAccount => "bank account number",
+            Self::RoutingNumber => "routing number",
+            Self::DriversLicence => "driver's licence number",
+            Self::Passport => "passport number",
+            Self::MedicalRecordNumber => "medical record number",
+            Self::HealthInsuranceId => "health insurance ID",
+        }
+    }
+
     /// True when a value of this kind, on its own, points at a specific person.
     ///
     /// A row needs at least one such element to become a person record: a date of birth

@@ -7,7 +7,7 @@
 use std::collections::BTreeSet;
 use std::process::Command;
 
-use rollcall_case::{Case, IngestOptions, Values, export_csv, ingest};
+use rollcall_case::{Case, IngestOptions, Values, export_records_csv as export_csv, ingest};
 use rollcall_model::GapKind;
 use xtask::score::score;
 use xtask::synth::{Expect, generate};

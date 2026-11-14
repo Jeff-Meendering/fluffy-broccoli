@@ -6,7 +6,7 @@
 use std::fs;
 use std::path::Path;
 
-use rollcall_case::{Case, IngestOptions, Values, export_csv, ingest};
+use rollcall_case::{Case, IngestOptions, Values, export_records_csv as export_csv, ingest};
 use rollcall_model::GapKind;
 use tempfile::TempDir;
 

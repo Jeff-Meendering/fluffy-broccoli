@@ -9,7 +9,7 @@ use std::collections::HashMap;
 use std::io::{Cursor, Read};
 
 use rollcall_model::date::spreadsheet_serial_to_date;
-use rollcall_model::{CoverageGap, GapKind, Table};
+use rollcall_model::{CoverageGap, GapKind, Table, visible};
 use zip::ZipArchive;
 use zip::result::ZipError;
 
@@ -78,16 +78,30 @@ fn read_workbook(archive: &mut Archive<'_>, limits: &Limits) -> Result<Extractio
         Some(text) => parse_styles(&text)?,
         None => Vec::new(),
     };
-    let context = SheetContext {
-        shared: &shared,
-        date_styles: &date_styles,
-        date1904: workbook.date1904,
-        limits,
-    };
-
+    // The cell limit covers the whole workbook: many sheets must not add up to more
+    // than one sheet may hold.
+    let mut remaining_cells = limits.max_cells;
     let mut extraction = Extraction::default();
     for sheet in workbook.sheets {
-        let scope = Some(sheet.name);
+        let scope = Some(visible(&sheet.name));
+        if remaining_cells == 0 {
+            extraction.gaps.push(CoverageGap::new(
+                scope,
+                GapKind::Truncated,
+                "Sheet was not read: the workbook reached the size limit before it.",
+            ));
+            continue;
+        }
+        let sheet_limits = Limits {
+            max_cells: remaining_cells,
+            ..*limits
+        };
+        let context = SheetContext {
+            shared: &shared,
+            date_styles: &date_styles,
+            date1904: workbook.date1904,
+            limits: &sheet_limits,
+        };
         let Some(link) = links
             .iter()
             .find(|relationship| relationship.id == sheet.link)
@@ -118,6 +132,12 @@ fn read_workbook(archive: &mut Archive<'_>, limits: &Limits) -> Result<Extractio
                         ),
                     ));
                 }
+                let cells: usize = sheet.rows.iter().map(Vec::len).sum();
+                remaining_cells = if sheet.truncated {
+                    0
+                } else {
+                    remaining_cells.saturating_sub(cells)
+                };
                 if !sheet.rows.is_empty() {
                     extraction.tables.push(Table {
                         scope,
@@ -146,21 +166,27 @@ fn read_part(
     let entry = match archive.by_name(path) {
         Ok(entry) => entry,
         Err(ZipError::FileNotFound) => return Ok(None),
-        Err(_) => return Err(format!("Workbook part {path} could not be opened.")),
+        Err(_) => {
+            return Err(format!(
+                "Workbook part {} could not be opened.",
+                visible(path)
+            ));
+        }
     };
     let mut data = Vec::new();
     entry
         .take(limits.max_part_bytes.saturating_add(1))
         .read_to_end(&mut data)
-        .map_err(|_| format!("Workbook part {path} could not be decompressed."))?;
+        .map_err(|_| format!("Workbook part {} could not be decompressed.", visible(path)))?;
     if u64::try_from(data.len()).unwrap_or(u64::MAX) > limits.max_part_bytes {
         return Err(format!(
-            "Workbook part {path} is larger than the size limit."
+            "Workbook part {} is larger than the size limit.",
+            visible(path)
         ));
     }
     String::from_utf8(data)
         .map(Some)
-        .map_err(|_| format!("Workbook part {path} is not UTF-8 text."))
+        .map_err(|_| format!("Workbook part {} is not UTF-8 text.", visible(path)))
 }
 
 struct Relationship {

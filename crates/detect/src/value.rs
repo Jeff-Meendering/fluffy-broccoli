@@ -137,6 +137,8 @@ fn name(raw: &str) -> Normalized {
         // introduces a suffix or credentials, which stays where it is.
         Some((last, first)) if !first.contains(',') && !first.trim().is_empty() => {
             format!("{} {}", first.trim(), last.trim())
+                .trim()
+                .to_owned()
         }
         _ => collapsed,
     };
@@ -146,9 +148,9 @@ fn name(raw: &str) -> Normalized {
         .count();
     let valid = letters >= 2
         && reordered.chars().count() <= 100
-        && !reordered
-            .chars()
-            .any(|character| character.is_ascii_digit() || character == '@');
+        && !reordered.chars().any(|character| {
+            character.is_ascii_digit() || character == '@' || character.is_control()
+        });
     Normalized {
         value: reordered,
         valid,
@@ -319,7 +321,9 @@ fn identifier(raw: &str) -> Option<String> {
 fn free_text(raw: &str, shortest: usize, digits_allowed: bool) -> Normalized {
     let value = collapse(raw);
     let valid = value.chars().count() >= shortest
+        && value.chars().count() <= 200
         && value.chars().any(char::is_alphabetic)
+        && !value.chars().any(char::is_control)
         && (digits_allowed || !value.chars().any(|character| character.is_ascii_digit()));
     Normalized { value, valid }
 }

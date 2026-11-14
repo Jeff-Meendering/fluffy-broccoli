@@ -12,6 +12,7 @@ use rollcall_extract::delimited::write_row;
 use rollcall_model::ElementKind;
 use serde::{Deserialize, Serialize};
 
+use crate::docx::write_document;
 use crate::xlsx::{Cell, Sheet, write_workbook};
 
 /// What the tool is expected to make of one generated file.
@@ -723,6 +724,85 @@ pub fn generate(seed: u64, primaries: usize, out: &Path) -> Result<Truth> {
         .files
         .push((path.to_owned(), delimited(&rows, ','), Expect::Records));
 
+    // Incident notes: blocks of labelled lines for some people, and passing mentions
+    // of others in prose.
+    let path = "notes/incident-notes.txt";
+    let mut notes = String::from("Incident notes, working copy\nDo not forward.\n\n");
+    for (index, person) in people.iter().enumerate().take(primaries) {
+        let (area, exchange, line) = person.phone_parts();
+        if index % 7 == 2 {
+            notes.push_str(&format!(
+                "Name: {}\nSSN: {}\nDOB: {:02}/{:02}/{:04}\nEmail: {}\n\n",
+                person.name(),
+                person.ssn_dashed(),
+                person.birth.1,
+                person.birth.2,
+                person.birth.0,
+                person.email
+            ));
+            dataset.expose(
+                index,
+                path,
+                &[
+                    (Kind::Name, person.name()),
+                    (Kind::Ssn, person.ssn_dashed()),
+                    (Kind::DateOfBirth, person.birth_iso()),
+                    (Kind::Email, person.email.clone()),
+                ],
+            );
+        } else if index % 7 == 5 {
+            notes.push_str(&format!(
+                "Password reset requested for {}, callback {area}-{exchange}-{line}.\n",
+                person.email
+            ));
+            dataset.expose(
+                index,
+                path,
+                &[
+                    (Kind::Email, person.email.clone()),
+                    (Kind::Phone, format!("+1{}", person.phone)),
+                ],
+            );
+        }
+    }
+    dataset
+        .files
+        .push((path.to_owned(), notes.into_bytes(), Expect::Records));
+
+    // A Word document: a staff table between paragraphs of ordinary prose.
+    let path = "hr/onboarding.docx";
+    let mut rows = vec![strings(&["Name", "Email", "Phone"])];
+    for index in (0..primaries).filter(|index| index % 9 == 1) {
+        let person = &people[index];
+        let (area, exchange, line) = person.phone_parts();
+        rows.push(vec![
+            person.name(),
+            person.email.clone(),
+            format!("({area}) {exchange}-{line}"),
+        ]);
+        dataset.expose(
+            index,
+            path,
+            &[
+                (Kind::Name, person.name()),
+                (Kind::Email, person.email.clone()),
+                (Kind::Phone, format!("+1{}", person.phone)),
+            ],
+        );
+    }
+    let document = write_document(
+        &[
+            "New starter checklist",
+            "",
+            "The people below start this quarter.",
+        ],
+        &rows,
+        &["", "Questions go to the people team."],
+    )?;
+    dataset
+        .files
+        .push((path.to_owned(), document, Expect::Records));
+
     // Files that hold no person records, each for a different reason.
     let inventory = "SKU,Description,Qty,Unit Price\nA-100,Stapler,14,8.50\nA-101,Toner,3,61.00\n";
     dataset.files.extend([
@@ -732,8 +812,8 @@ pub fn generate(seed: u64, primaries: usize, out: &Path) -> Result<Truth> {
             Expect::Gap,
         ),
         (
-            "misc/handbook.docx".to_owned(),
-            b"PK\x03\x04 not read by this version".to_vec(),
+            "misc/handbook.pdf".to_owned(),
+            b"%PDF-1.7 not read by this version".to_vec(),
             Expect::Gap,
         ),
         (

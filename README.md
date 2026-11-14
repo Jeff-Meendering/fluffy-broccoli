@@ -2,7 +2,7 @@
 
 Open-source breach-response data mining. Point it at a folder of files taken in a breach and it builds the list that has to exist before anyone can be notified: **who was affected, and which of their data was exposed**.
 
-> **Status: early development (Milestone 2).** Spreadsheets only. Not ready for a real incident. `rollcall` is a working name.
+> **Status: early development.** Spreadsheets, text files and Word documents. Not ready for a real incident. `rollcall` is a working name.
 
 ## Who it is for
 
@@ -10,8 +10,9 @@ Incident responders, and the security staff of organisations that cannot pay for
 
 ## What it does today
 
-- **Reads** CSV, TSV and XLSX/XLSM files with its own parsers.
+- **Reads** spreadsheets (CSV, TSV, XLSX/XLSM), Word documents (DOCX), HTML pages and text files (TXT, LOG, MD, JSON, YAML, INI, SQL, XML) with its own parsers. Tables inside Word documents are read as tables.
 - **Recognises** columns by header and, where there is none, by strict checks on the values: names, SSNs and ITINs, dates of birth, email, phone, postal address, payment cards, bank account and routing numbers, driver's licence, passport, medical record and insurance IDs. It repairs what spreadsheets damage, such as leading zeros dropped from SSNs and ZIP codes.
+- **Reads running text** for values it can trust: a labelled line (`SSN: 219-09-9999`, `"email": "a@example.com"`) or a format that is hard to mistake (an email address, a dashed SSN, a punctuated phone number, a card number that passes its checksum). A run of labelled lines is one person; values on one line go together unless a kind repeats.
 - **Links** each row to the person it describes. Columns about someone else (`Spouse SSN`, `Emergency Contact Phone`) become that person's own record.
 - **Merges** records of the same person across files, and says why. It merges without asking only on strong evidence: an identifier issued to one person, or a matching name together with a shared date of birth, email, phone or address. It knows short forms of names (`Bob`, `Robert`) and never puts two SSNs or two dates of birth into one person.
 - **Asks** about everything weaker. `rollcall review list` shows pairs of records that may be one person; a reviewer accepts or rejects each, and can merge or split any two records by hand. Rulings survive re-ingest.
@@ -22,7 +23,8 @@ Incident responders, and the security staff of organisations that cannot pay for
 
 ## What it does not do yet
 
-- Read documents, PDFs, email, archives, images or legacy `.xls` files. These are reported as gaps, not skipped silently.
+- Read PDFs, email, archives, images or legacy `.xls` and `.doc` files. These are reported as gaps, not skipped silently.
+- Find names in running prose. In text, a name is only taken from a labelled line; an email or SSN mentioned in a sentence becomes a record without a name, which joins a named person when the value matches one.
 - Join records that share nothing: a row with only a name and date of birth and a row with only an email and SSN stay two entries, because nothing in the data connects them.
 - Suggest matches on a name alone when more than eight unmerged groups share it. Common names need other evidence.
 - Decide whether a person must be notified under any law. That is a legal judgement.

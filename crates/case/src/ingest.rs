@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result, bail};
 use rollcall_detect::infer_schema;
 use rollcall_extract::{Limits, extract};
-use rollcall_link::link_table;
+use rollcall_link::{link_table, link_text};
 use rollcall_model::{CoverageGap, GapKind, PersonRecord, visible};
 use rusqlite::{OptionalExtension, Transaction, params};
 use sha2::{Digest, Sha256};
@@ -250,6 +250,13 @@ fn ingest_file(
             summary.new_records += 1;
         }
     }
+    // Running text holding no personal data is ordinary, and is not a gap.
+    for text in &extraction.texts {
+        for record in link_text(text) {
+            insert_record(transaction, document, logical, &file_hash, &record)?;
+            summary.new_records += 1;
+        }
+    }
     Ok(())
 }
 
@@ -260,24 +267,34 @@ fn insert_record(
     file_hash: &str,
     record: &PersonRecord,
 ) -> Result<()> {
+    // Several records can start on one line of text, so what a record holds is part of
+    // what identifies it.
+    let content: Vec<String> = record
+        .observations
+        .iter()
+        .map(|observation| format!("{}={}", observation.kind.as_str(), observation.normalized))
+        .collect();
     let fingerprint = sha256_hex(
         format!(
-            "{logical}\n{file_hash}\n{}\n{}\n{}",
+            "{logical}\n{file_hash}\n{}\n{} {}\n{}\n{}",
             record.scope.as_deref().unwrap_or_default(),
+            record.unit.as_str(),
             record.row,
-            record.relation.as_deref().unwrap_or_default()
+            record.relation.as_deref().unwrap_or_default(),
+            content.join("\u{1f}")
         )
         .as_bytes(),
     );
     transaction
         .prepare_cached(
-            "INSERT INTO records(document_id, scope, row, relation, fingerprint)
-             VALUES(?1, ?2, ?3, ?4, ?5)",
+            "INSERT INTO records(document_id, scope, row, unit, relation, fingerprint)
+             VALUES(?1, ?2, ?3, ?4, ?5, ?6)",
         )?
         .execute(params![
             document,
             record.scope,
             record.row,
+            record.unit.as_str(),
             record.relation,
             fingerprint
         ])?;

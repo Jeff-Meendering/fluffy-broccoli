@@ -149,3 +149,28 @@ fn any_table_gets_a_schema_within_its_own_bounds() {
         assert!(schema.columns.iter().all(|column| column.index < width));
     }
 }
+
+#[test]
+fn any_line_of_text_can_be_scanned_and_what_is_found_is_clean() {
+    let mut random = Random(14);
+    for _ in 0..40_000 {
+        let line = hostile_text(&mut random);
+        for found in rollcall_detect::scan_line(&line) {
+            assert!(!found.normalized.is_empty(), "{line:?}");
+            assert!(
+                !found.normalized.chars().any(char::is_control),
+                "{line:?} gave {:?}",
+                found.normalized
+            );
+            assert!(
+                found.start <= line.chars().count(),
+                "{line:?}: offset {}",
+                found.start
+            );
+            assert!(
+                normalize(found.kind, &found.normalized).valid || found.kind == ElementKind::Name,
+                "{line:?}"
+            );
+        }
+    }
+}

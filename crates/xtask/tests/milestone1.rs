@@ -66,7 +66,7 @@ fn every_seeded_person_is_listed_and_every_file_is_accounted_for() {
             vec![
                 ("benefits/enrollment.xlsx", GapKind::Unrecognised),
                 ("misc/corrupt.xlsx", GapKind::Unreadable),
-                ("misc/handbook.docx", GapKind::Unsupported),
+                ("misc/handbook.pdf", GapKind::Unsupported),
                 ("misc/inventory.csv", GapKind::Unrecognised),
             ]
         );

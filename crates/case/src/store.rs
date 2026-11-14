@@ -4,16 +4,16 @@ use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context, Result, bail};
-use rollcall_model::{ElementKind, GapKind, Method, Observation};
+use rollcall_model::{ElementKind, GapKind, Method, Observation, Unit};
 use rusqlite::{Connection, OptionalExtension, params};
 use sha2::{Digest, Sha256};
 
 const SCHEMA: &str = include_str!("schema.sql");
-const SCHEMA_VERSION: i64 = 2;
+const SCHEMA_VERSION: i64 = 3;
 
 /// Identifies the reading and detection logic that produced a document's records.
 /// A document ingested by a different engine is read again rather than reused.
-pub const ENGINE: &str = concat!("rollcall ", env!("CARGO_PKG_VERSION"), " / case schema 2");
+pub const ENGINE: &str = concat!("rollcall ", env!("CARGO_PKG_VERSION"), " / case schema 3");
 
 pub struct Case {
     pub(crate) connection: Connection,
@@ -48,6 +48,8 @@ pub struct StoredRecord {
     pub sha256: Option<String>,
     pub scope: Option<String>,
     pub row: u32,
+    /// What `row` counts: rows of a table or lines of text.
+    pub unit: Unit,
     pub relation: Option<String>,
     pub observations: Vec<Observation>,
 }
@@ -61,8 +63,13 @@ impl StoredRecord {
             .as_deref()
             .map(|scope| format!(" [{scope}]"))
             .unwrap_or_default();
-        // Rows are stored zero-based; people count them from one.
-        format!("{}{sheet} row {}", self.path, u64::from(self.row) + 1)
+        // Rows and lines are stored zero-based; people count them from one.
+        format!(
+            "{}{sheet} {} {}",
+            self.path,
+            self.unit.as_str(),
+            u64::from(self.row) + 1
+        )
     }
 }
 
@@ -83,7 +90,7 @@ pub struct StoredGap {
 
 const RECORD_COLUMNS: &str = "SELECT r.id, d.path, d.sha256, r.scope, r.row, r.relation,
         o.kind, o.raw, o.normalized, o.valid, o.col, o.header, o.method,
-        r.fingerprint, COALESCE(m.person_id, r.id) AS person
+        r.fingerprint, COALESCE(m.person_id, r.id) AS person, r.unit
  FROM records r
  JOIN documents d ON d.id = r.document_id
  LEFT JOIN membership m ON m.record_id = r.id
@@ -266,6 +273,7 @@ impl Case {
                     sha256: row.get(2)?,
                     scope: row.get(3)?,
                     row: row.get(4)?,
+                    unit: Unit::parse(&row.get::<_, String>(15)?).unwrap_or(Unit::Row),
                     relation: row.get(5)?,
                     observations: Vec::new(),
                 }),

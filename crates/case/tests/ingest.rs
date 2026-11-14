@@ -17,7 +17,7 @@ fn evidence() -> TempDir {
     fs::create_dir_all(folder.path().join("hr")).unwrap();
     fs::write(folder.path().join("hr/staff.csv"), STAFF).unwrap();
     fs::write(folder.path().join("stock.csv"), "SKU,Qty\nA-1,4\n").unwrap();
-    fs::write(folder.path().join("memo.docx"), b"not read yet").unwrap();
+    fs::write(folder.path().join("memo.pdf"), b"not read yet").unwrap();
     folder
 }
 
@@ -52,7 +52,7 @@ fn every_file_is_either_read_into_records_or_listed_as_a_gap() {
     assert_eq!(
         listed,
         vec![
-            ("memo.docx", GapKind::Unsupported),
+            ("memo.pdf", GapKind::Unsupported),
             ("stock.csv", GapKind::Unrecognised)
         ]
     );

@@ -4,8 +4,12 @@
 //! `Emergency Contact Phone` describe someone else. Each such related person gets a
 //! record of their own, so their data is never credited to the row's main subject.
 
+mod text;
+
 use rollcall_detect::{Column, Role, Schema, is_placeholder, normalize};
-use rollcall_model::{ElementKind, Observation, PersonRecord, Table};
+
+use rollcall_model::{ElementKind, Observation, PersonRecord, Table, Unit};
+pub use text::link_text;
 
 /// Builds the person records of one table from its recognised columns.
 #[must_use]
@@ -37,6 +41,7 @@ pub fn link_table(table: &Table, schema: &Schema) -> Vec<PersonRecord> {
                     row: table
                         .first_row
                         .saturating_add(u32::try_from(offset).unwrap_or(u32::MAX)),
+                    unit: Unit::Row,
                     relation: relation.map(str::to_owned),
                     observations,
                 });

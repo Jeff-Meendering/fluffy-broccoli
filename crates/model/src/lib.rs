@@ -269,12 +269,51 @@ pub struct Observation {
     pub method: Method,
 }
 
-/// The data elements one table row holds about one person.
+/// Running text from a document: one entry per line or paragraph.
+///
+/// `lines[n]` is zero-based line `first_line + n` of the source. Blank lines are kept:
+/// they separate one block of text from the next.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Text {
+    /// The part of the document, such as a header or footnotes; `None` for its body.
+    pub scope: Option<String>,
+    pub first_line: u32,
+    pub lines: Vec<String>,
+}
+
+/// What a record's position counts: rows of a table or lines of text.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Unit {
+    Row,
+    Line,
+}
+
+impl Unit {
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Row => "row",
+            Self::Line => "line",
+        }
+    }
+
+    #[must_use]
+    pub fn parse(value: &str) -> Option<Self> {
+        match value {
+            "row" => Some(Self::Row),
+            "line" => Some(Self::Line),
+            _ => None,
+        }
+    }
+}
+
+/// The data elements one table row, or one passage of text, holds about one person.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PersonRecord {
     pub scope: Option<String>,
-    /// Zero-based row in the source sheet.
+    /// Zero-based row in the source sheet, or line in the source text.
     pub row: u32,
+    pub unit: Unit,
     /// `None` for the row's main subject; otherwise the related person the columns
     /// describe, such as `spouse` or `emergency contact`.
     pub relation: Option<String>,

@@ -4,11 +4,13 @@
 //! of the values themselves, which only accept formats that are hard to mistake.
 
 mod header;
+mod text;
 mod value;
 
 use rollcall_model::{ElementKind, Method, Table};
 
 pub use header::{HeaderMeaning, Role, classify_header, normalize_header};
+pub use text::{Found, NamePart, scan_line};
 pub use value::{Normalized, is_placeholder, looks_like, normalize};
 
 /// How far down a sheet a header row is looked for, past any title lines.

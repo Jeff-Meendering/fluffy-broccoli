@@ -17,6 +17,7 @@ Incident responders, and the security staff of organisations that cannot pay for
 - **Asks** about everything weaker. `rollcall review list` shows pairs of records that may be one person; a reviewer accepts or rejects each, and can merge or split any two records by hand. Rulings survive re-ingest.
 - **Keeps a case** (one SQLite file) with a SHA-256 for every evidence file, and an audit log in which each entry is chained to the one before.
 - **Reports every coverage gap:** unsupported or unreadable files, tables it could not interpret, size limits reached, files that have gone missing.
+- **Summarises** a case in the figures a breach report starts from: people by kind of data exposed, by state or province, by how they can be reached, and how many are minors.
 - **Exports** the notification list as CSV, one row per person, with sensitive identifiers masked to their last four characters unless you ask for full values. A second export lists the source records behind it.
 
 ## What it does not do yet
@@ -41,6 +42,7 @@ rollcall review list --case /tmp/breach.rollcall
 rollcall review accept 1 --case /tmp/breach.rollcall --note "same person, checked the source"
 rollcall person 1 --case /tmp/breach.rollcall
 rollcall gaps --case /tmp/breach.rollcall
+rollcall summary --case /tmp/breach.rollcall
 rollcall export --case /tmp/breach.rollcall --out /tmp/list.csv
 rollcall audit --case /tmp/breach.rollcall
 ```

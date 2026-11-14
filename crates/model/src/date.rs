@@ -47,14 +47,27 @@ pub const fn is_valid_date(year: i32, month: u32, day: u32) -> bool {
     month >= 1 && month <= 12 && day >= 1 && day <= days_in_month(year, month)
 }
 
-/// The current calendar year in UTC.
+/// Today's date in UTC as `(year, month, day)`.
 #[must_use]
-pub fn current_year() -> i32 {
+pub fn today() -> (i32, u32, u32) {
     let seconds = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_or(0, |elapsed| elapsed.as_secs());
-    let days = i64::try_from(seconds / 86_400).unwrap_or(0);
-    civil_from_days(days).0
+    civil_from_days(i64::try_from(seconds / 86_400).unwrap_or(0))
+}
+
+/// The current calendar year in UTC.
+#[must_use]
+pub fn current_year() -> i32 {
+    today().0
+}
+
+/// Whole years from a date of birth to another date; `None` when the birth date is
+/// later than the other date.
+#[must_use]
+pub fn age_on(birth: (i32, u32, u32), on: (i32, u32, u32)) -> Option<u32> {
+    let had_birthday = (on.1, on.2) >= (birth.1, birth.2);
+    u32::try_from(on.0 - birth.0 - i32::from(!had_birthday)).ok()
 }
 
 /// A calendar date with the number of seconds elapsed in that day.
@@ -127,6 +140,14 @@ mod tests {
         assert_eq!(civil_from_days(-1), (1969, 12, 31));
         assert_eq!(civil_from_days(11_016), (2000, 2, 29));
         assert_eq!(civil_from_days(20_770), (2026, 11, 13));
+    }
+
+    #[test]
+    fn ages_count_completed_years() {
+        assert_eq!(age_on((2008, 11, 14), (2026, 11, 14)), Some(18));
+        assert_eq!(age_on((2008, 11, 15), (2026, 11, 14)), Some(17));
+        assert_eq!(age_on((2026, 1, 1), (2026, 11, 14)), Some(0));
+        assert_eq!(age_on((2027, 1, 1), (2026, 11, 14)), None);
     }
 
     #[test]

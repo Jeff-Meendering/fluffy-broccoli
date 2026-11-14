@@ -13,7 +13,7 @@ use rollcall_case::{
     export_records_csv, ingest, mask, summarise, summarise_person,
 };
 use rollcall_model::ElementKind;
-use rollcall_model::date::civil_from_days;
+use rollcall_model::date::{civil_from_days, today};
 
 #[derive(Parser)]
 #[command(
@@ -58,6 +58,11 @@ enum Command {
     },
     /// List evidence that was not, or not fully, turned into person records
     Gaps {
+        #[arg(long)]
+        case: PathBuf,
+    },
+    /// Count the people in a case by what was exposed, where they live and how to reach them
+    Summary {
         #[arg(long)]
         case: PathBuf,
     },
@@ -201,6 +206,7 @@ fn run(command: Command) -> Result<String> {
         Command::People { case, limit } => people_command(&case, limit),
         Command::Person { id, case } => person_command(&case, id),
         Command::Gaps { case } => gaps_command(&case),
+        Command::Summary { case } => summary_command(&case),
         Command::Review { action } => review_command(action),
         Command::Audit { case, verify } => audit_command(&case, verify),
         Command::Export {
@@ -460,6 +466,103 @@ fn gaps_command(case_path: &Path) -> Result<String> {
             gaps.len()
         )?;
     }
+    Ok(text)
+}
+
+fn summary_command(case_path: &Path) -> Result<String> {
+    let case = Case::open_existing(case_path)?;
+    let (year, month, day) = today();
+    let summary = case.summary((year, month, day))?;
+    let mut text = String::new();
+    writeln!(text, "People:           {}", summary.people)?;
+    writeln!(
+        text,
+        "Source records:   {} in {} files",
+        summary.source_records, summary.files
+    )?;
+    if summary.open_questions > 0 {
+        writeln!(
+            text,
+            "Open questions:   {}  (until they are settled, some people are counted more than once)",
+            summary.open_questions
+        )?;
+    }
+    if summary.coverage_gaps > 0 {
+        writeln!(
+            text,
+            "Coverage gaps:    {}  (the counts below cover only the evidence that was read)",
+            summary.coverage_gaps
+        )?;
+    }
+
+    writeln!(text, "\nPeople by kind of data exposed")?;
+    for (category, people) in &summary.by_category {
+        writeln!(text, "  {:<48} {people:>8}", category.label())?;
+    }
+    writeln!(
+        text,
+        "  {:<48} {:>8}",
+        "Nothing beyond a name and contact details", summary.contact_only
+    )?;
+
+    writeln!(text, "\nPeople by element exposed")?;
+    for (kind, people) in &summary.by_element {
+        writeln!(text, "  {:<48} {people:>8}", kind.as_str())?;
+    }
+
+    writeln!(
+        text,
+        "\nPeople by state or province (someone with addresses in two is counted in both)"
+    )?;
+    for (region, people) in &summary.by_region {
+        writeln!(text, "  {region:<48} {people:>8}")?;
+    }
+    writeln!(text, "  {:<48} {:>8}", "(none on file)", summary.no_region)?;
+
+    writeln!(text, "\nHow people can be reached")?;
+    writeln!(
+        text,
+        "  {:<48} {:>8}",
+        "Postal address on file", summary.reach.by_post
+    )?;
+    writeln!(
+        text,
+        "  {:<48} {:>8}",
+        "Email address only", summary.reach.by_email_only
+    )?;
+    writeln!(
+        text,
+        "  {:<48} {:>8}",
+        "Phone number only", summary.reach.by_phone_only
+    )?;
+    writeln!(
+        text,
+        "  {:<48} {:>8}",
+        "No contact details", summary.reach.no_contact
+    )?;
+
+    writeln!(text, "\nOther")?;
+    writeln!(
+        text,
+        "  {:<48} {:>8}",
+        format!("Under 18 on {year:04}-{month:02}-{day:02}"),
+        summary.minors
+    )?;
+    writeln!(
+        text,
+        "  {:<48} {:>8}",
+        "No date of birth on file", summary.no_birth_date
+    )?;
+    writeln!(text, "  {:<48} {:>8}", "No name on file", summary.unnamed)?;
+    writeln!(
+        text,
+        "  {:<48} {:>8}",
+        "With a value that failed validation", summary.needs_review
+    )?;
+    writeln!(
+        text,
+        "\nThese are counts of what was found. Who must be notified is a legal judgement."
+    )?;
     Ok(text)
 }
 

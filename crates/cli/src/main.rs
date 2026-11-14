@@ -186,14 +186,29 @@ fn main() -> ExitCode {
     match run(Cli::parse().command) {
         Ok(text) => {
             // A closed pipe (`rollcall people | head`) is not an error worth reporting.
-            let _ = std::io::stdout().write_all(text.as_bytes());
+            let _ = std::io::stdout().write_all(printable(&text).as_bytes());
             ExitCode::SUCCESS
         }
         Err(error) => {
-            eprintln!("error: {error:#}");
+            eprintln!("error: {}", printable(&format!("{error:#}")));
             ExitCode::FAILURE
         }
     }
+}
+
+/// Text for a terminal. Values found in evidence can hold control characters that would
+/// move the cursor, recolour the screen or hide what came before; every one except the
+/// line breaks this program writes is shown as a visible escape instead.
+fn printable(text: &str) -> String {
+    let mut shown = String::with_capacity(text.len());
+    for character in text.chars() {
+        if character.is_control() && character != '\n' {
+            shown.push_str(&format!("\\u{{{:x}}}", u32::from(character)));
+        } else {
+            shown.push(character);
+        }
+    }
+    shown
 }
 
 fn run(command: Command) -> Result<String> {
@@ -783,4 +798,28 @@ fn export_command(case_path: &Path, out: &Path, level: Level, values: Values) ->
         )?;
     }
     Ok(text)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn terminal_output_cannot_carry_control_sequences() {
+        assert_eq!(
+            printable("ID  NAME\n1   Jane Doe\n"),
+            "ID  NAME\n1   Jane Doe\n"
+        );
+        assert_eq!(
+            printable("Jane\u{1b}[2J\u{1b}[HDoe\r\u{7}"),
+            "Jane\\u{1b}[2J\\u{1b}[HDoe\\u{d}\\u{7}"
+        );
+        assert_eq!(printable("tab\there \u{9b}31m"), "tab\\u{9}here \\u{9b}31m");
+    }
+
+    #[test]
+    fn timestamps_are_written_in_utc() {
+        assert_eq!(timestamp(0), "1970-01-01 00:00:00 UTC");
+        assert_eq!(timestamp(1_794_632_709), "2026-11-14 05:05:09 UTC");
+    }
 }

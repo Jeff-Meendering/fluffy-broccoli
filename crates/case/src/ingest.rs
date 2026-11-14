@@ -1,5 +1,6 @@
 //! Ingest: walk an evidence folder and record what each file holds.
 
+use std::collections::HashSet;
 use std::fs::{self, File};
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -8,7 +9,7 @@ use anyhow::{Context, Result, bail};
 use rollcall_detect::infer_schema;
 use rollcall_extract::{Limits, extract};
 use rollcall_link::link_table;
-use rollcall_model::{CoverageGap, GapKind, PersonRecord};
+use rollcall_model::{CoverageGap, GapKind, PersonRecord, visible};
 use rusqlite::{OptionalExtension, Transaction, params};
 use sha2::{Digest, Sha256};
 
@@ -380,7 +381,7 @@ fn walk(root: &Path) -> Vec<(String, Found)> {
         };
         entries.sort_by_key(fs::DirEntry::file_name);
         for entry in entries {
-            let name = entry.file_name().to_string_lossy().into_owned();
+            let name = visible(&entry.file_name().to_string_lossy());
             let logical = if prefix.is_empty() {
                 name
             } else {
@@ -414,5 +415,16 @@ fn walk(root: &Path) -> Vec<(String, Found)> {
         }
     }
     found.sort_by(|left, right| left.0.cmp(&right.0));
+    // Names that are not valid text are shown with stand-in characters, so two files can
+    // end up with one name. Each file must keep its own entry in the case.
+    let mut seen: HashSet<String> = HashSet::new();
+    for (logical, _) in &mut found {
+        let mut copy = 2;
+        let original = logical.clone();
+        while !seen.insert(logical.clone()) {
+            *logical = format!("{original} (name collision {copy})");
+            copy += 1;
+        }
+    }
     found
 }

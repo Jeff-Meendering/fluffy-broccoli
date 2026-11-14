@@ -57,6 +57,10 @@ The audit log detects an entry that was changed or removed from the middle. It c
 
 A passing score on synthetic data shows the pipeline is consistent with its own test generator. It is not evidence of accuracy on real breach data.
 
+## Security and contributing
+
+Evidence is treated as hostile input; [SECURITY.md](SECURITY.md) lists what the tool defends against and what it does not. [CONTRIBUTING.md](CONTRIBUTING.md) explains how changes are judged.
+
 ## Layout
 
 | Crate | Purpose |

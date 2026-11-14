@@ -190,6 +190,27 @@ impl std::fmt::Display for ElementKind {
     }
 }
 
+/// Rewrites text that came from evidence so it can be stored and shown as one line.
+///
+/// File and sheet names are chosen by whoever made the evidence. Control characters in
+/// them could forge lines of output or drive a terminal, so each is written as a visible
+/// escape such as `\u{1b}`. Backslashes are doubled, which keeps the rewriting
+/// reversible: two different names never come out the same.
+#[must_use]
+pub fn visible(text: &str) -> String {
+    let mut shown = String::with_capacity(text.len());
+    for character in text.chars() {
+        match character {
+            '\\' => shown.push_str("\\\\"),
+            _ if character.is_control() => {
+                shown.push_str(&format!("\\u{{{:x}}}", u32::from(character)));
+            }
+            _ => shown.push(character),
+        }
+    }
+    shown
+}
+
 /// One sheet or delimited file, kept as rows and cells.
 ///
 /// `rows[r][c]` is the cell at zero-based sheet row `first_row + r` and column
@@ -331,6 +352,14 @@ mod tests {
             assert_eq!(ElementKind::parse(kind.as_str()), Some(kind));
         }
         assert_eq!(ElementKind::parse("wallet"), None);
+    }
+
+    #[test]
+    fn control_characters_become_visible_and_distinct_names_stay_distinct() {
+        assert_eq!(visible("plain name.csv"), "plain name.csv");
+        assert_eq!(visible("a\u{1b}[2Jb\nc"), "a\\u{1b}[2Jb\\u{a}c");
+        assert_eq!(visible("back\\slash"), "back\\\\slash");
+        assert_ne!(visible("a\u{1b}"), visible("a\\u{1b}"));
     }
 
     #[test]

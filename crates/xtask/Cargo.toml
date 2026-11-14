@@ -1,0 +1,25 @@
+[package]
+name = "xtask"
+description = "Project tooling: synthetic breach data and notification-list scoring"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+rollcall-model.workspace = true
+anyhow.workspace = true
+clap.workspace = true
+rollcall-extract.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+zip.workspace = true
+
+[dev-dependencies]
+rollcall-case.workspace = true
+tempfile.workspace = true
+
+[lints]
+workspace = true

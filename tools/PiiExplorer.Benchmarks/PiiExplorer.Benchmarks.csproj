@@ -1,4 +1,0 @@
-<Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup><OutputType>Exe</OutputType></PropertyGroup>
-  <ItemGroup><ProjectReference Include="../../src/PiiExplorer.Core/PiiExplorer.Core.csproj" /></ItemGroup>
-</Project>

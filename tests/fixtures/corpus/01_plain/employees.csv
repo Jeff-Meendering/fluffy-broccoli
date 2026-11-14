@@ -1,5 +1,0 @@
-employee_id,full_name,email,phone,ssn,date_of_birth,home_address
-E1000,Maria Hernandez,maria.hernandez@example.com,415-555-0142,123-45-6789,1984-03-11,"1600 Pennsylvania Avenue, Washington DC 20500"
-E1001,David Okonkwo,d.okonkwo@example.org,(212) 555-0177,987-65-4321,1979-11-02,"742 Evergreen Terrace, Springfield IL 62704"
-E1002,Priya Raghunathan,priya.r@example.net,+44 20 7946 0958,456-78-9012,1991-07-24,"221B Baker Street, London NW1 6XE"
-E1003,Tomas Andersson,tomas.andersson@example.co.uk,503-555-0119,321-54-9876,1968-01-30,"10 Downing Street, London SW1A 2AA"

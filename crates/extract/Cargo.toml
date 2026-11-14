@@ -1,0 +1,16 @@
+[package]
+name = "rollcall-extract"
+description = "Turns evidence files into structured tables with coordinates"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+rollcall-model.workspace = true
+zip.workspace = true
+
+[lints]
+workspace = true

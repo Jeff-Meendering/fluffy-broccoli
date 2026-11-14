@@ -1,9 +1,0 @@
-<Solution>
-  <Folder Name="/src/">
-    <Project Path="src/PiiExplorer.App/PiiExplorer.App.csproj" />
-    <Project Path="src/PiiExplorer.Core/PiiExplorer.Core.csproj" />
-  </Folder>
-  <Folder Name="/tests/">
-    <Project Path="tests/PiiExplorer.Tests/PiiExplorer.Tests.csproj" />
-  </Folder>
-</Solution>

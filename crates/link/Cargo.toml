@@ -1,0 +1,16 @@
+[package]
+name = "rollcall-link"
+description = "Links the data elements in one table row to the person they belong to"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+rollcall-model.workspace = true
+rollcall-detect.workspace = true
+
+[lints]
+workspace = true

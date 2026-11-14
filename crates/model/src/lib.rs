@@ -124,6 +124,25 @@ impl ElementKind {
         )
     }
 
+    /// The broad kind of data this element is, as breach reports group it.
+    #[must_use]
+    pub const fn category(self) -> Category {
+        match self {
+            Self::Name => Category::Name,
+            Self::Ssn | Self::DriversLicence | Self::Passport => Category::GovernmentId,
+            Self::PaymentCard | Self::BankAccount | Self::RoutingNumber => Category::Financial,
+            Self::MedicalRecordNumber | Self::HealthInsuranceId => Category::Health,
+            Self::DateOfBirth => Category::BirthDate,
+            Self::Email
+            | Self::Phone
+            | Self::Address
+            | Self::City
+            | Self::State
+            | Self::PostalCode
+            | Self::Country => Category::Contact,
+        }
+    }
+
     /// True for identifiers that exports mask unless full values are requested.
     #[must_use]
     pub const fn is_secret(self) -> bool {
@@ -137,6 +156,31 @@ impl ElementKind {
                 | Self::MedicalRecordNumber
                 | Self::HealthInsuranceId
         )
+    }
+}
+
+/// Broad kinds of personal data, as breach reports group them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum Category {
+    Name,
+    GovernmentId,
+    Financial,
+    Health,
+    BirthDate,
+    Contact,
+}
+
+impl Category {
+    #[must_use]
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Name => "Name",
+            Self::GovernmentId => "Government identifier (SSN, licence, passport)",
+            Self::Financial => "Financial account (card, bank)",
+            Self::Health => "Health (medical record, insurance)",
+            Self::BirthDate => "Date of birth",
+            Self::Contact => "Contact details",
+        }
     }
 }
 

@@ -9,6 +9,7 @@ mod export;
 mod ingest;
 mod persons;
 mod store;
+mod summary;
 
 pub use export::{
     HashingWriter, PersonSummary, Values, export_people_csv, export_records_csv, mask, summarise,
@@ -19,3 +20,4 @@ pub use persons::{
     AuditCheck, AuditEntry, ResolveSummary, StoredDecision, StoredLink, StoredSuggestion,
 };
 pub use store::{Case, Counts, StoredDocument, StoredGap, StoredPerson, StoredRecord};
+pub use summary::{CaseSummary, Reach};

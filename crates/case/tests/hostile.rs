@@ -77,7 +77,7 @@ fn hostile_names_and_values_stay_inert_and_no_file_hides_another() {
     assert_eq!(
         paths
             .iter()
-            .any(|path| path.ends_with("(name collision 2)")),
+            .any(|path| path.ends_with("(name collision 2).csv")),
         odd_names,
         "{paths:?}"
     );

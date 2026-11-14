@@ -439,9 +439,54 @@ fn walk(root: &Path) -> Vec<(String, Found)> {
         let mut copy = 2;
         let original = logical.clone();
         while !seen.insert(logical.clone()) {
-            *logical = format!("{original} (name collision {copy})");
+            *logical = collision_name(&original, copy);
             copy += 1;
         }
     }
     found
+}
+
+/// A distinct name for the `copy`-th file that is displayed as `name`. The marker goes
+/// before the extension: the extension decides how the file is read, and must survive.
+fn collision_name(name: &str, copy: usize) -> String {
+    let file_starts = name.rfind('/').map_or(0, |slash| slash + 1);
+    match name[file_starts..].rfind('.').filter(|dot| *dot > 0) {
+        Some(dot) => {
+            let (stem, extension) = name.split_at(file_starts + dot);
+            format!("{stem} (name collision {copy}){extension}")
+        }
+        None => format!("{name} (name collision {copy})"),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_collision_marker_keeps_the_extension_that_says_how_to_read_the_file() {
+        assert_eq!(
+            collision_name("staff.csv", 2),
+            "staff (name collision 2).csv"
+        );
+        assert_eq!(
+            collision_name("hr.d/staff.tar.gz", 3),
+            "hr.d/staff.tar (name collision 3).gz"
+        );
+        assert_eq!(
+            collision_name("hr.d/README", 2),
+            "hr.d/README (name collision 2)"
+        );
+        assert_eq!(collision_name(".hidden", 2), ".hidden (name collision 2)");
+        let renamed = collision_name("\u{fffd}.csv", 2);
+        assert!(
+            rollcall_extract::extract(
+                &renamed,
+                b"Name,SSN\nDee Lee,219-09-9994\n",
+                &Limits::default()
+            )
+            .gaps
+            .is_empty()
+        );
+    }
 }

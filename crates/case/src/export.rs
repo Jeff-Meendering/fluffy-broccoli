@@ -384,6 +384,7 @@ mod tests {
             sha256: None,
             scope: None,
             row: 1,
+            unit: rollcall_model::Unit::Row,
             relation: None,
             observations: values
                 .iter()

@@ -5,10 +5,12 @@
 //! the same person: the row.
 
 pub mod delimited;
+mod docx;
+mod text;
 mod xlsx;
 mod xml;
 
-use rollcall_model::{CoverageGap, GapKind, Table};
+use rollcall_model::{CoverageGap, GapKind, Table, Text};
 
 /// Bounds on how much of one file is held in memory.
 #[derive(Debug, Clone, Copy)]
@@ -29,17 +31,19 @@ impl Default for Limits {
     }
 }
 
+/// What one file holds: tables, running text, and whatever could not be read.
 #[derive(Debug, Default, PartialEq, Eq)]
 pub struct Extraction {
     pub tables: Vec<Table>,
+    pub texts: Vec<Text>,
     pub gaps: Vec<CoverageGap>,
 }
 
 impl Extraction {
     fn gap(kind: GapKind, detail: impl Into<String>) -> Self {
         Self {
-            tables: Vec::new(),
             gaps: vec![CoverageGap::new(None, kind, detail)],
+            ..Self::default()
         }
     }
 }
@@ -55,6 +59,12 @@ pub fn extract(name: &str, bytes: &[u8], limits: &Limits) -> Extraction {
         Some("csv" | "psv") => read_delimited(bytes, None, limits),
         Some("tsv" | "tab") => read_delimited(bytes, Some('\t'), limits),
         Some("xlsx" | "xlsm") => xlsx::read(bytes, limits),
+        Some("docx" | "docm") => docx::read(bytes, limits),
+        Some("html" | "htm") => text::read_html(bytes, limits),
+        Some(
+            "txt" | "text" | "log" | "md" | "json" | "yaml" | "yml" | "ini" | "conf" | "cfg"
+            | "sql" | "xml",
+        ) => text::read_plain(bytes, limits),
         Some(legacy @ ("xls" | "xlsb" | "ods")) => Extraction::gap(
             GapKind::Unsupported,
             format!("Spreadsheet format .{legacy} is not read yet."),
@@ -110,7 +120,11 @@ fn read_delimited(bytes: &[u8], delimiter: Option<char>, limits: &Limits) -> Ext
             rows: parsed.rows,
         }]
     };
-    Extraction { tables, gaps }
+    Extraction {
+        tables,
+        gaps,
+        ..Extraction::default()
+    }
 }
 
 #[cfg(test)]
@@ -133,7 +147,7 @@ mod tests {
 
     #[test]
     fn reports_unsupported_and_extensionless_files() {
-        for name in ["notes.docx", "old.xls", "README", ".hidden", "dir.d/file"] {
+        for name in ["notes.pdf", "old.xls", "README", ".hidden", "dir.d/file"] {
             let extraction = extract(name, b"data", &Limits::default());
             assert!(extraction.tables.is_empty(), "{name}");
             assert_eq!(extraction.gaps[0].kind, GapKind::Unsupported, "{name}");

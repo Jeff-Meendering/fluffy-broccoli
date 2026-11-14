@@ -18,6 +18,8 @@ CREATE TABLE records(
     document_id INTEGER NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
     scope TEXT,
     row INTEGER NOT NULL,
+    -- What `row` counts: 'row' of a table or 'line' of text.
+    unit TEXT NOT NULL,
     relation TEXT,
     -- Identifies this record by where it came from and the exact bytes of its file,
     -- so a reviewer's rulings survive re-ingest but not a change to the evidence.

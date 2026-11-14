@@ -119,7 +119,9 @@ fn random_bytes_end_in_tables_or_gaps() {
         let bytes: Vec<u8> = (0..length)
             .map(|_| random.next().to_le_bytes()[0])
             .collect();
-        for name in ["x.csv", "x.tsv", "x.xlsx", "x.xlsm"] {
+        for name in [
+            "x.csv", "x.tsv", "x.xlsx", "x.xlsm", "x.txt", "x.json", "x.html", "x.docx",
+        ] {
             for limits in [Limits::default(), TIGHT] {
                 check(
                     &extract(name, &bytes, &limits),
@@ -371,5 +373,79 @@ fn names_chosen_by_the_adversary_cannot_forge_output() {
         extraction.gaps.len(),
         1,
         "the part outside the container does not exist"
+    );
+}
+
+const DOCUMENT: &str = r#"<w:document xmlns:w="w"><w:body><w:p><w:r><w:t>Name: Jane Doe</w:t></w:r></w:p><w:p/><w:tbl><w:tr><w:tc><w:p><w:r><w:t>SSN</w:t></w:r></w:p></w:tc></w:tr><w:tr><w:tc><w:p><w:r><w:t>219-09-9999</w:t><w:tab/><w:br/></w:r></w:p></w:tc></w:tr></w:tbl></w:body></w:document>"#;
+
+#[test]
+fn damaged_documents_and_pages_end_in_text_tables_or_gaps() {
+    let mut random = Random(4);
+    let page = b"<html><head><script>x</script></head><body><p>Jane &amp; co<br>jane@example.com</p></body></html>";
+    for round in 0..2_500 {
+        let mut body = DOCUMENT.as_bytes().to_vec();
+        let mut footer = b"<w:ftr><w:p><w:r><w:t>hr@example.com</w:t></w:r></w:p></w:ftr>".to_vec();
+        let mut html = page.to_vec();
+        for _ in 0..=random.below(3) {
+            mutate(&mut random, &mut body);
+            mutate(&mut random, &mut footer);
+            mutate(&mut random, &mut html);
+        }
+        let document = workbook(&[("word/document.xml", &body), ("word/footer1.xml", &footer)]);
+        for limits in [Limits::default(), TIGHT] {
+            check(
+                &extract("letter.docx", &document, &limits),
+                &limits,
+                &format!("document round {round}"),
+            );
+            check(
+                &extract("page.html", &html, &limits),
+                &limits,
+                &format!("page round {round}"),
+            );
+            check(
+                &extract("notes.txt", &html, &limits),
+                &limits,
+                &format!("text round {round}"),
+            );
+        }
+    }
+}
+
+#[test]
+fn deeply_nested_tables_and_endless_paragraphs_stay_within_the_limits() {
+    let nested = format!(
+        r#"<w:document xmlns:w="w"><w:body>{}<w:p><w:r><w:t>x</w:t></w:r></w:p>{}</w:body></w:document>"#,
+        "<w:tbl><w:tr><w:tc>".repeat(5_000),
+        "</w:tc></w:tr></w:tbl>".repeat(5_000)
+    );
+    let extraction = extract(
+        "nested.docx",
+        &workbook(&[("word/document.xml", nested.as_bytes())]),
+        &Limits::default(),
+    );
+    check(&extraction, &Limits::default(), "nested tables");
+    assert_eq!(extraction.tables[0].rows, [["x"]]);
+
+    let many = format!(
+        r#"<w:document xmlns:w="w"><w:body>{}</w:body></w:document>"#,
+        "<w:p><w:r><w:t>line</w:t></w:r></w:p>".repeat(500)
+    );
+    let few_rows = Limits {
+        max_rows: 40,
+        ..Limits::default()
+    };
+    let extraction = extract(
+        "many.docx",
+        &workbook(&[("word/document.xml", many.as_bytes())]),
+        &few_rows,
+    );
+    check(&extraction, &few_rows, "many paragraphs");
+    assert_eq!(extraction.texts[0].lines.len(), 40);
+    assert!(
+        extraction
+            .gaps
+            .iter()
+            .any(|gap| gap.kind == GapKind::Truncated)
     );
 }
